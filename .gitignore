@@ -1,0 +1,71 @@
+# bytecode y caché de python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# distribución y empaquetado
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+wheels/
+pip-wheel-metadata/
+
+# tests y cobertura
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+
+# herramientas de tipado y linting
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+
+# jupyter
+.ipynb_checkpoints/
+
+# variables de entorno y secretos
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+logs/
+
+# bases de datos locales (sqlite)
+*.db
+*.sqlite
+*.sqlite3
+
+# exportaciones generadas
+exports/
+*.pcap
+*.pcapng
+
+# editores e ides
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# rust (si se añaden extensiones con pyo3)
+target/
+Cargo.lock
