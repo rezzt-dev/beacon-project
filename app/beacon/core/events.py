@@ -21,6 +21,9 @@ class EventType(StrEnum):
   PORT_OPENED = "port-opened"
   PORT_CLOSED = "port-closed"
   IP_CONFLICT = "ip-conflict"
+  IDENTITY_CANDIDATE = "identity-candidate"
+  UNUSUAL_PRESENCE = "unusual-presence"
+  ROUTINE_BROKEN = "routine-broken"
 
 
 class Severity(StrEnum):
@@ -40,6 +43,7 @@ class Event:
   mac: str | None = None
   details: dict[str, Any] = field(default_factory=dict)
   timestamp: datetime = field(default_factory=utcnow)
+  id: int | None = None  # database row id, set only on events read back from storage
 
   def to_dict(self) -> dict[str, Any]:
     return {

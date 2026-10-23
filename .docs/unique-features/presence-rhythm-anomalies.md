@@ -1,5 +1,5 @@
 ###  BEACON PROJECT  |  RITMO DE PRESENCIA Y ANOMALIAS
-> propuesta de funcionalidad (no implementada). beacon aprende el patrón de presencia de cada dispositivo y avisa de lo que rompe su rutina: un dispositivo que aparece a una hora inusual o uno que siempre está y desaparece.
+> propuesta de funcionalidad (implementada). beacon aprende el patrón de presencia de cada dispositivo y avisa de lo que rompe su rutina: un dispositivo que aparece a una hora inusual o uno que siempre está y desaparece.
 ---
 ####   1. IDENTIFICACION
 | campo | valor |
@@ -157,3 +157,16 @@ volumen: un dispositivo con 10 conexiones al día genera ~3.600 filas al año; n
    - panel de línea temporal en la futura tui con `textual`.
    - exportación de la línea temporal al informe html (`export/html_export.py`) como mapa de calor autocontenido.
    - integración con `guided-triage-and-risk-score.md`: la anomalía de horario como factor del riesgo.
+
+---
+####   8. IMPLEMENTACION REAL Y DIFERENCIAS
+implementado según la sección 3, con estas decisiones y cambios. los umbrales son los de la propuesta y siguen sin calibrar con datos de redes reales.
+   - **cierre de sesión por huecos:** además del cierre por `device-offline`, si pasan más de `SESSION_GAP` (15 min; `max(15 min, 3 × interval)` en `watch`) entre dos escaneos se cierra la sesión con su última vez visto y se abre otra. sin esto, dos `scan` manuales separados por días contarían como una estancia continua.
+   - **`routine-broken`:** exige 14 días de historia pero no 6 sesiones. un dispositivo que nunca se va tiene una sola sesión continua y, con la regla de 6 sesiones, jamás se habría vigilado justo el caso que esta señal quiere cubrir. además se ignora si lleva más de 7 días ausente y se emite una sola vez por ausencia (consulta `has_event_since`).
+   - **`unusual-presence`:** exige 14 días y 6 sesiones, y solo se evalúa cuando el dispositivo vuelve de offline (no en cada escaneo).
+   - **firma de `detect_anomalies`:** recibe los perfiles, los dispositivos que vuelven y los ausentes en lugar de un único `current`; sigue siendo pura (reloj y zona horaria inyectados).
+   - **identidad:** las sesiones de macs vinculadas se unen en un solo historial (`sessions_by_identity`) y la línea temporal muestra una fila por identidad. un dispositivo aleatorizado sin vínculo queda fuera del análisis y `devices show` lo explica.
+   - **`beacon prune --sessions-older-than`:** implementado (la propuesta lo dejaba como idea). no borra sesiones abiertas.
+   - **línea temporal:** las columnas se fusionan hasta caber en el terminal (nunca menos de 8) y el pie indica cuántos días de historia hay frente a los 14 necesarios.
+   - **horario de verano:** las celdas se calculan convirtiendo cada hora utc a hora local, por lo que los cambios de hora se absorben; los tests cubren desfases fijos (incluido uno de media hora) pero no hay una prueba específica de la transición.
+   - **fuera de alcance:** ventana nocturna configurable para desconocidos, correlación entre dispositivos y mapa de calor en el informe html siguen en la sección 7.

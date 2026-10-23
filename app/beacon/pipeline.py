@@ -5,14 +5,23 @@ import platform
 import socket
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from ipaddress import IPv4Address, IPv4Network
 from typing import Protocol
 
 from beacon.core.diff import detect_changes
 from beacon.core.engine import CleaningEngine, apply_ttl, clean_hostname
-from beacon.core.events import EventBus
+from beacon.core.events import Event, EventBus, EventType
+from beacon.core.identity import IdentityMatch, IdentityResolver
 from beacon.core.models import Device, DeviceStatus, DiscoverySource, Observation, ScanMode, utcnow
+from beacon.core.presence import (
+  MAX_ROUTINE_ABSENCE,
+  PROFILE_WEEKS,
+  SESSION_GAP,
+  build_profile,
+  detect_anomalies,
+  is_profilable,
+)
 from beacon.core.report import ScanReport
 from beacon.core.vendors import VendorDatabase
 from beacon.scanners.arp import arp_sweep, read_arp_table
@@ -22,6 +31,7 @@ from beacon.scanners.latency import measure_latency
 from beacon.scanners.network import InterfaceInfo, iter_hosts, list_interfaces, resolve_target
 from beacon.scanners.ports import scan_ports, tcp_alive
 from beacon.scanners.privileges import privileged_mode_available
+from beacon.scanners.services import discover_services
 from beacon.storage.repository import Repository
 
 
@@ -43,6 +53,9 @@ class ScanOptions:
   offline_grace: float = 0.0
   resolve_hostnames: bool = True
   grab_banners: bool = True
+  identity: bool = True
+  presence: bool = True
+  presence_gap: float = SESSION_GAP.total_seconds()
   save: bool = True
 
 
@@ -110,15 +123,20 @@ class ScanPipeline:
       report.ports_scanned,
       offline_grace=timedelta(seconds=options.offline_grace),
       now=now,
+      identity_candidates=self._identity_candidates(previous, devices) if options.identity else None,
     )
     self._carry_history(previous, devices, report.ports_scanned, now)
+    if options.presence:
+      report.events += self._presence_events(previous, devices, network, now)
 
     report.devices = sorted(devices.values(), key=lambda d: IPv4Address(d.ip))
     report.conflicts = merged.conflicts
     report.discarded = merged.discarded
     report.finished_at = now
     if options.save:
-      report.scan_id = self.repository.save_scan(report)
+      report.scan_id = self.repository.save_scan(
+        report, presence=options.presence, presence_gap=timedelta(seconds=options.presence_gap)
+      )
     self.bus.publish_many(report.events)
     return report
 
@@ -227,6 +245,12 @@ class ScanPipeline:
         hostname = (
           asyncio.create_task(resolver.resolve(device.ip)) if resolver and not device.hostname else None
         )
+        # a randomized mac says nothing about the device, so the services it announces help recognize it later
+        services = (
+          asyncio.create_task(discover_services(device.ip, options.discovery_timeout))
+          if options.identity and device.randomized_mac and not device.is_local
+          else None
+        )
         if options.ports:
           device.ports = await scan_ports(device.ip, options.ports, options.port_timeout, port_limiter, banner_timeout)
         if options.latency_samples > 0 and not device.is_local:
@@ -237,6 +261,8 @@ class ScanPipeline:
           apply_ttl(device, ttl)
         if hostname is not None:
           device.hostname, device.hostname_source = await hostname
+        if services is not None:
+          device.services = await services
       self.progress.advance()
 
     try:
@@ -250,6 +276,46 @@ class ScanPipeline:
     device.hostname = clean_hostname(socket.gethostname())
     device.hostname_source = "local" if device.hostname else None
     device.os_guess = f"{platform.system()} {platform.release()}".strip().lower() or None
+
+  # identity and presence ->
+  @staticmethod
+  def _identity_candidates(previous: dict[str, Device], devices: dict[str, Device]) -> dict[str, IdentityMatch]:
+    """new randomized devices that are probably a known randomized one that vanished in this same scan.
+
+    a known device still present can never be the same one, so only those that are gone are
+    candidates. if several newcomers point at the same candidate, nobody is sure: none is linked.
+    """
+    gone = [d for key, d in previous.items() if key not in devices and d.randomized_mac and not d.is_local]
+    newcomers = [d for key, d in devices.items() if key not in previous and d.randomized_mac and not d.is_local]
+    resolver = IdentityResolver()
+    found = {d.key: match for d in newcomers if (match := resolver.best(d, gone)) is not None}
+    taken = [m.candidate_key for m in found.values()]
+    return {key: m for key, m in found.items() if taken.count(m.candidate_key) == 1}
+
+  def _presence_events(
+    self, previous: dict[str, Device], devices: dict[str, Device], network: IPv4Network, now: datetime
+  ) -> list[Event]:
+    """unusual-presence for devices that just came back and routine-broken for always-on ones that vanished."""
+    arrivals = [d for key, d in devices.items() if key in previous and previous[key].status == DeviceStatus.OFFLINE]
+    absent = [
+      d
+      for key, d in previous.items()
+      if key not in devices
+      and d.last_seen is not None
+      and now - d.last_seen <= MAX_ROUTINE_ABSENCE
+      and IPv4Address(d.ip) in network
+    ]
+    subjects = [d for d in [*arrivals, *absent] if is_profilable(d)]
+    if not subjects:
+      return []
+    sessions = self.repository.sessions_by_identity(subjects, since=now - timedelta(weeks=PROFILE_WEEKS))
+    profiles = {d.key: build_profile(sessions[d.key], now) for d in subjects}
+    flagged = {
+      d.key
+      for d in absent
+      if d.last_seen and self.repository.has_event_since(d.key, EventType.ROUTINE_BROKEN, d.last_seen)
+    }
+    return detect_anomalies(profiles, arrivals, absent, now, flagged)
 
   # history ->
   @staticmethod
@@ -266,6 +332,9 @@ class ScanPipeline:
       device.first_seen = old.first_seen or now
       device.alias = old.alias
       device.trusted = old.trusted
+      device.identity_id = old.identity_id
+      if not device.services:
+        device.services = old.services
       if not ports_scanned:
         device.ports = old.ports
       if device.hostname is None and old.hostname:

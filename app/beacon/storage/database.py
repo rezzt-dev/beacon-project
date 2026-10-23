@@ -67,6 +67,34 @@ MIGRATIONS: tuple[str, ...] = (
   CREATE INDEX idx_events_device ON events (device_key);
   CREATE INDEX idx_events_timestamp ON events (timestamp);
   """,
+  # v2: events can be acknowledged once the user has reviewed them
+  """
+  ALTER TABLE events ADD COLUMN acked_at TEXT;
+  CREATE INDEX idx_events_pending ON events (severity) WHERE acked_at IS NULL;
+  """,
+  # v3: identities group the macs of one physical device (randomized private addresses)
+  """
+  ALTER TABLE devices ADD COLUMN services TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE devices ADD COLUMN identity_id INTEGER;
+  CREATE TABLE identities (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    label      TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_devices_identity ON devices (identity_id);
+  """,
+  # v4: presence sessions, one row per continuous stay of a device on the network
+  """
+  CREATE TABLE sessions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_key TEXT NOT NULL REFERENCES devices (key) ON DELETE CASCADE,
+    started_at TEXT NOT NULL,
+    ended_at   TEXT,
+    last_seen  TEXT NOT NULL
+  );
+  CREATE INDEX idx_sessions_device ON sessions (device_key, started_at);
+  CREATE INDEX idx_sessions_open ON sessions (device_key) WHERE ended_at IS NULL;
+  """,
 )
 SCHEMA_VERSION = len(MIGRATIONS)
 

@@ -64,17 +64,18 @@ def read_name(data: bytes, offset: int) -> tuple[str, int]:
     offset += length
 
 
-def parse_ptr_response(data: bytes, txid: int | None = None) -> str | None:
-  """return the first ptr target found in any section of a response."""
+def parse_ptr_records(data: bytes, txid: int | None = None, limit: int = 64) -> list[str]:
+  """return every ptr target found in any section of a response, up to `limit` (the data is untrusted)."""
   if len(data) < 12:
     raise DnsParseError("packet shorter than a dns header")
   rx_id, flags, qdcount, ancount, nscount, arcount = struct.unpack("!HHHHHH", data[:12])
   if not flags & FLAG_RESPONSE or (txid is not None and rx_id != txid):
-    return None
+    return []
   offset = 12
   for _ in range(qdcount):
     _, offset = read_name(data, offset)
     offset += 4
+  targets: list[str] = []
   for _ in range(ancount + nscount + arcount):
     _, offset = read_name(data, offset)
     if offset + 10 > len(data):
@@ -83,6 +84,14 @@ def parse_ptr_response(data: bytes, txid: int | None = None) -> str | None:
     offset += 10
     if rtype == TYPE_PTR:
       target, _ = read_name(data, offset)
-      return target
+      targets.append(target)
+      if len(targets) >= limit:
+        break
     offset += rdlength
-  return None
+  return targets
+
+
+def parse_ptr_response(data: bytes, txid: int | None = None) -> str | None:
+  """return the first ptr target found in any section of a response."""
+  targets = parse_ptr_records(data, txid, limit=1)
+  return targets[0] if targets else None

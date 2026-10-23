@@ -8,7 +8,7 @@ import typer
 from rich.logging import RichHandler
 
 from beacon import __version__
-from beacon.cli.commands import devices, inventory, scan, tools, vendors
+from beacon.cli.commands import devices, inventory, review, scan, timeline, tools, vendors
 from beacon.cli.context import AppContext
 from beacon.config import Settings
 from beacon.pipeline import ScanError
@@ -30,9 +30,12 @@ app.command(rich_help_panel="scanning")(scan.watch)
 app.command(rich_help_panel="tools")(tools.ports)
 app.command(rich_help_panel="tools")(tools.ping)
 app.command(rich_help_panel="tools")(tools.interfaces)
+app.command(rich_help_panel="inventory")(review.review)
 app.command(rich_help_panel="inventory")(inventory.events)
+app.command(rich_help_panel="inventory")(timeline.timeline)
 app.command(rich_help_panel="inventory", name="export")(inventory.export)
 app.command(rich_help_panel="inventory")(inventory.status)
+app.command(rich_help_panel="inventory")(inventory.prune)
 app.add_typer(devices.app, name="devices", rich_help_panel="inventory")
 app.add_typer(vendors.app, name="vendors", rich_help_panel="tools")
 

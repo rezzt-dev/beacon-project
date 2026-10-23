@@ -25,6 +25,7 @@
 ####   MACS ALEATORIZADAS
    - si el bit "locally administered" está activo (segundo dígito hexadecimal 2, 6, a o e) en una mac unicast, el dispositivo se marca como `randomized_mac`.
    - no se consulta su fabricante (no existe) y se muestra como `randomized (private mac)` en lugar de `unknown`. es lo habitual en móviles modernos con la privacidad de wi-fi activada.
+   - el motor de limpieza no los relaciona entre sí: eso lo hace después `core/identity.py` (huella por hostname, servicios mdns, puertos y ttl), que propone vínculos con evidencias y nunca hereda la confianza. ver `persistencia-y-eventos.md`.
 ---
 ####   CONFLICTOS DE IP
    - si una misma ip responde desde dos o más macs en el mismo escaneo, se genera un `IpConflict`: puede ser una mala configuración o un ataque de arp spoofing. se convierte en un evento `ip-conflict` con severidad `alert`.

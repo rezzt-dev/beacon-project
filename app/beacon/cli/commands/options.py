@@ -1,4 +1,6 @@
  # import libraries ->
+import re
+from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -9,6 +11,23 @@ from beacon.scanners.ports import parse_port_spec
 
 
  # shared option types ->
+_DURATION = re.compile(r"^(\d+)([mhdw])$")
+_DURATION_UNITS = {"m": "minutes", "h": "hours", "d": "days", "w": "weeks"}
+
+
+def parse_duration(value: str) -> timedelta:
+  """`30m`, `24h`, `7d` or `2w` as a timedelta; anything else is a usage error."""
+  match = _DURATION.match(value.strip().lower())
+  if match is None or int(match.group(1)) == 0:
+    raise typer.BadParameter(f"{value!r} is not a duration; use a number and a unit: 30m, 24h, 7d or 2w")
+  return timedelta(**{_DURATION_UNITS[match.group(2)]: int(match.group(1))})
+
+
+def check_duration(value: str) -> str:
+  parse_duration(value)
+  return value
+
+
 def _parse_ports(value: str | None) -> str | None:
   if value is not None:
     try:
@@ -39,6 +58,12 @@ NoResolve = Annotated[bool, typer.Option("--no-resolve", help="skip hostname res
 NoBanners = Annotated[bool, typer.Option("--no-banners", help="do not read service banners from open ports.")]
 Timeout = Annotated[float, typer.Option("--timeout", "-t", min=0.1, max=30, help="discovery timeout per host, seconds.")]
 PortTimeout = Annotated[float, typer.Option("--port-timeout", min=0.1, max=30, help="tcp connect timeout, seconds.")]
+NoIdentity = Annotated[
+  bool, typer.Option("--no-identity", help="skip the mdns service probe and the matching of randomized macs.")
+]
+NoPresence = Annotated[
+  bool, typer.Option("--no-presence", help="do not record presence sessions or raise presence anomalies.")
+]
 Output = Annotated[
   Path | None,
   typer.Option("--output", "-o", help="export results to a file (.json, .csv or .html).", show_default=False),

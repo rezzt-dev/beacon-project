@@ -146,6 +146,8 @@ class Device:
   status: DeviceStatus = DeviceStatus.ONLINE
   first_seen: datetime | None = None
   last_seen: datetime | None = None
+  services: list[str] = field(default_factory=list)
+  identity_id: int | None = None
 
   @property
   def key(self) -> str:
@@ -167,8 +169,9 @@ class Device:
       return "randomized (private mac)"
     return "unknown"
 
-  def to_dict(self) -> dict[str, Any]:
-    return {
+  def to_dict(self, fingerprint: bool = False) -> dict[str, Any]:
+    """serialize the device; `services` is part of the identity fingerprint and only included on request."""
+    data = {
       "key": self.key,
       "ip": self.ip,
       "ips": self.ips,
@@ -189,4 +192,8 @@ class Device:
       "latency": self.latency.to_dict() if self.latency else None,
       "open_ports": [p.to_dict() for p in self.open_ports],
       "sources": sorted(self.sources),
+      "identity_id": self.identity_id,
     }
+    if fingerprint:
+      data["services"] = list(self.services)
+    return data

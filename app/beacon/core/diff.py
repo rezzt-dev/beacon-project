@@ -1,11 +1,13 @@
  # import libraries ->
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
 from ipaddress import IPv4Address, IPv4Network
 
 from beacon.core.engine import IpConflict
 from beacon.core.events import Event, EventType, Severity
+from beacon.core.identity import IdentityMatch
 from beacon.core.models import Device, DeviceStatus, utcnow
+from beacon.core.risk import RiskLevel, assess
 
 
  # helpers ->
@@ -36,6 +38,7 @@ def detect_changes(
   ports_scanned: bool = False,
   offline_grace: timedelta = timedelta(0),
   now: datetime | None = None,
+  identity_candidates: Mapping[str, IdentityMatch] | None = None,
 ) -> list[Event]:
   """compare the stored state with a fresh scan and emit change events.
 
@@ -43,26 +46,52 @@ def detect_changes(
   another subnet does not flip the state of the rest of the inventory. a device
   missing for less than `offline_grace` is kept online: phones in power saving
   skip probes now and then, and flapping events are just noise.
+
+  an empty inventory means this is the first scan: every host is "new" by definition, so
+  they are warnings (to be reviewed) and only an obviously risky one is an alert. a randomized
+  device that probably is a known one with a new private mac (`identity_candidates`, by new
+  key) is reported as an identity candidate instead of an unknown intruder.
   """
   events: list[Event] = []
   now = now or utcnow()
+  baseline = not previous
+  identity_candidates = identity_candidates or {}
 
   for key, device in sorted(current.items(), key=lambda item: IPv4Address(item[1].ip)):
     old = previous.get(key)
     if old is None and device.is_local:
       events.append(_event(EventType.NEW_DEVICE, Severity.INFO, f"this host registered: {_label(device)}", device))
       continue
+    match = identity_candidates.get(key) if old is None else None
+    if match is not None and (known := previous.get(match.candidate_key)) is not None:
+      events.append(
+        _event(
+          EventType.IDENTITY_CANDIDATE,
+          Severity.WARNING,
+          f"probably {known.alias or known.hostname or known.ip} with a new private mac ({match.summary()}): {_label(device)}",
+          device,
+          candidate_key=match.candidate_key,
+          score=match.score,
+          evidence=list(match.evidence),
+        )
+      )
+      continue
     if old is None:
       kind = "randomized mac" if device.randomized_mac else device.display_vendor
+      risk = assess(device)
+      alert = not baseline or risk.level == RiskLevel.HIGH
+      headline = "unknown device joined the network" if not baseline else "device found in the first scan"
       events.append(
         _event(
           EventType.NEW_DEVICE,
-          Severity.ALERT,
-          f"unknown device joined the network: {_label(device)} - {kind}",
+          Severity.ALERT if alert else Severity.WARNING,
+          f"{headline}: {_label(device)} - {kind}",
           device,
           vendor=device.vendor,
           randomized_mac=device.randomized_mac,
           open_ports=[p.port for p in device.open_ports],
+          risk=risk.score,
+          baseline=baseline,
         )
       )
       continue

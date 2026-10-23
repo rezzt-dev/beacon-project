@@ -1,14 +1,16 @@
  # import libraries ->
 import asyncio
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from functools import cached_property
 
 import typer
 
 from beacon.config import Settings
-from beacon.core.events import EventBus
-from beacon.core.models import Device
+from beacon.core.events import EventBus, EventType
+from beacon.core.models import Device, utcnow
 from beacon.core.report import ScanReport
+from beacon.core.risk import RECENT_WINDOW, RiskAssessment, assess
 from beacon.core.vendors import VendorDatabase
 from beacon.pipeline import ProgressReporter, ScanOptions, ScanPipeline
 from beacon.storage import Database, Repository
@@ -48,6 +50,17 @@ class AppContext:
       err_console.print(f"[alert]error:[/alert] no device matches {ref!r} (use a mac, ip, alias or hostname)")
       raise typer.Exit(1)
     return device
+
+  def assess_devices(self, devices: Iterable[Device]) -> dict[str, RiskAssessment]:
+    """risk per device from the stored state: unreviewed new ports and conflicts of the last day."""
+    repo = self.repository
+    cutoff = utcnow() - RECENT_WINDOW
+    events = [
+      *repo.list_events(limit=-1, types=[EventType.PORT_OPENED], pending_only=True),
+      *(e for e in repo.list_events(limit=100, types=[EventType.IP_CONFLICT]) if e.timestamp >= cutoff),
+    ]
+    ports_known = repo.ports_ever_scanned()
+    return {d.key: assess(d, events, ports_known) for d in devices}
 
   def run_scan(
     self,

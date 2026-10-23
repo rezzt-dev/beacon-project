@@ -19,6 +19,13 @@
 - añadir batería de 76 tests con `pytest` y configuración de `ruff`
 - añadir documentación de la fase en `.docs/project-info/cli-base/`
 - añadir tres propuestas de funcionalidades en `.docs/unique-features/`: triage guiado con puntuación de riesgo, identidad continua de dispositivos y ritmo de presencia
+- implementar el triage guiado: puntuación de riesgo explicable en `core/risk.py`, comando `beacon review` (interactivo, `--list`, `--json` y `--trust-below`), `events --pending`, `devices list --risk` y `scan --fail-on-risk`
+- implementar la identidad continua: huella por hostname, servicios mdns, puertos y ttl en `core/identity.py`, sondeo de servicios en `scanners/services.py`, evento `identity-candidate` y comandos `devices candidates`, `link` y `unlink`, con `--no-identity`
+- implementar el ritmo de presencia: sesiones guardadas en cada escaneo, perfil semanal en `core/presence.py`, eventos `unusual-presence` y `routine-broken`, comandos `beacon timeline` y `beacon prune`, mapa de calor en `devices show` y `--no-presence`
+- añadir migraciones 2, 3 y 4 del esquema sqlite (`events.acked_at`, identidades y servicios, sesiones de presencia); una base migrada ya no se abre con builds anteriores
+- añadir `export --include-fingerprint`: la huella de identidad ya no sale en las exportaciones por defecto
+- añadir `parse_ptr_records` en `scanners/protocols/dns.py` para leer todos los ptr de una respuesta
+- añadir 151 tests para las tres funcionalidades (227 en total)
 
 #### CAMBIOS
 - cambiar `app/app.py` para lanzar la cli de `beacon`
@@ -26,6 +33,9 @@
 - añadir `pyproject.toml` y `uv.lock` con dependencias, script `beacon` y configuración de `pytest` y `ruff`
 - mover las guías de `.docs/` a `.docs/guidelines/` y la documentación del proyecto a `.docs/project-info/`
 - actualizar `.gitignore` para ignorar caché de python, entornos virtuales y artefactos de empaquetado
+- cambiar el primer escaneo: los dispositivos descubiertos con el inventario vacío son avisos (`warning`) y solo son alertas si su riesgo es alto; el mensaje de `scan` sugiere `beacon review` en lugar de `trust-all`
+- cambiar `devices trust`, `trust-all` y `forget` para que marquen como revisados los eventos pendientes del dispositivo
+- actualizar la documentación de `.docs/project-info/cli-base/` y marcar las tres propuestas de `.docs/unique-features/` como implementadas
 
 #### CORREGIDO
 - corregir la tabla de dispositivos, que truncaba ip y mac en terminales estrechas: ahora oculta columnas opcionales según el ancho (`visible_columns`)
@@ -33,6 +43,10 @@
 - corregir la columna de puertos vacía en la tabla de `watch` cuando no hay puertos abiertos
 - corregir la cabecera del informe html (`os (ttl)` mostraba solo el so)
 - corregir el tipado de `datagram_received` en `scanners/hostname.py` (pyright)
+- corregir el primer escaneo, que lanzaba una alerta por cada host y hacía que `--fail-on-alert` terminara con código 3
+- corregir que una mac aleatorizada que cambia apareciera como un dispositivo nuevo y alertara como intruso: ahora se propone el vínculo con el dispositivo conocido
+- corregir que la presencia histórica no se guardara ni se pudiera consultar: ahora hay sesiones consultables con `beacon timeline`
+- corregir el título del panel de `devices show`, que interpretaba como marcado `rich` los corchetes de un alias
 
 ### ENGLISH
 
@@ -51,6 +65,13 @@
 - add a 76 test `pytest` suite and `ruff` configuration
 - add phase documentation in `.docs/project-info/cli-base/`
 - add three feature proposals in `.docs/unique-features/`: guided triage with risk score, continuous device identity and presence rhythm
+- implement guided triage: explainable risk score in `core/risk.py`, the `beacon review` command (interactive, `--list`, `--json` and `--trust-below`), `events --pending`, `devices list --risk` and `scan --fail-on-risk`
+- implement continuous identity: fingerprint from hostname, mdns services, ports and ttl in `core/identity.py`, service probing in `scanners/services.py`, the `identity-candidate` event and the `devices candidates`, `link` and `unlink` commands, with `--no-identity`
+- implement presence rhythm: sessions stored on every scan, weekly profile in `core/presence.py`, `unusual-presence` and `routine-broken` events, the `beacon timeline` and `beacon prune` commands, a heatmap in `devices show` and `--no-presence`
+- add sqlite schema migrations 2, 3 and 4 (`events.acked_at`, identities and services, presence sessions); a migrated database can no longer be opened by earlier builds
+- add `export --include-fingerprint`: the identity fingerprint is no longer part of exports by default
+- add `parse_ptr_records` in `scanners/protocols/dns.py` to read every ptr of a response
+- add 151 tests for the three features (227 in total)
 
 #### CHANGED
 - change `app/app.py` to launch the `beacon` cli
@@ -58,6 +79,9 @@
 - add `pyproject.toml` and `uv.lock` with dependencies, the `beacon` script and `pytest` and `ruff` configuration
 - move the guidelines from `.docs/` to `.docs/guidelines/` and the project documentation to `.docs/project-info/`
 - update `.gitignore` to ignore python cache, virtual environments and packaging artifacts
+- change the first scan: devices found with an empty inventory are warnings and only become alerts when their risk is high; the `scan` message suggests `beacon review` instead of `trust-all`
+- change `devices trust`, `trust-all` and `forget` so they mark the device's pending events as reviewed
+- update the documentation in `.docs/project-info/cli-base/` and mark the three proposals in `.docs/unique-features/` as implemented
 
 #### FIXED
 - fix the device table truncating ips and macs on narrow terminals: optional columns are now hidden by terminal width (`visible_columns`)
@@ -65,3 +89,7 @@
 - fix the empty open ports column in the `watch` table when no ports are open
 - fix the html report header (`os (ttl)` only showed the os)
 - fix the `datagram_received` signature typing in `scanners/hostname.py` (pyright)
+- fix the first scan raising one alert per host and making `--fail-on-alert` exit with code 3
+- fix a randomized mac that changes showing up as a new device and alerting as an intruder: the link to the known device is now proposed
+- fix historical presence not being stored or queryable: there are now sessions available through `beacon timeline`
+- fix the `devices show` panel title, which rendered the brackets of an alias as `rich` markup

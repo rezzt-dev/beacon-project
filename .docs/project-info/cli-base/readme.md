@@ -7,7 +7,7 @@ esta carpeta documenta la primera fase de desarrollo de beacon, centrada únicam
 estado al cierre de la fase:
    - **versión:** `0.1.0`.
    - **python:** 3.11 o superior (verificado en 3.13 y 3.14).
-   - **tests:** 76 pruebas automáticas en verde, sin acceso a red.
+   - **tests:** 227 pruebas automáticas en verde, sin acceso a red.
    - **verificación real:** escaneo completo de una red `/24` doméstica en modo sin privilegios en 5-8 segundos, con fabricantes, latencia, hostnames, puertos y banners.
 ---
 ####   INDICE
@@ -32,7 +32,10 @@ estado al cierre de la fase:
    - **hostnames** por dns inverso, mdns y netbios, con parsers propios de los protocolos.
    - **estimación de sistema operativo** por ttl.
    - **inventario persistente** en sqlite con alias, dispositivos de confianza e historial.
-   - **eventos de cambio:** dispositivo nuevo, online, offline, cambio de ip, puerto abierto, puerto cerrado y conflicto de ip (posible arp spoofing).
+   - **eventos de cambio:** dispositivo nuevo, online, offline, cambio de ip, puerto abierto, puerto cerrado, conflicto de ip (posible arp spoofing), identidad candidata, presencia inusual y rutina rota.
+   - **triage guiado** (`beacon review`): puntuación de riesgo explicable por dispositivo, revisión de avisos con una tecla y primer escaneo sin una alerta por host.
+   - **identidad continua:** una mac aleatorizada que vuelve con otra mac se propone como el mismo dispositivo, con evidencias, y se confirma con `beacon devices link`; la confianza nunca se hereda.
+   - **ritmo de presencia:** sesiones de conexión consultables (`beacon timeline`), mapa de calor semanal en `devices show` y avisos `unusual-presence` y `routine-broken`. los datos de presencia son personales: solo locales y fuera de las exportaciones.
    - **monitorización en vivo** (`beacon watch`) con tabla `rich` que se refresca y alertas.
    - **exportación** a json, csv y html autocontenido, incluida una exportación que se actualiza en cada ciclo de `watch`.
 ---

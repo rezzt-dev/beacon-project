@@ -52,6 +52,13 @@ fichero: `scanners/hostname.py` y `scanners/protocols/`.
    - **mdns:** consulta ptr unicast (`legacy unicast`, rfc 6762) al puerto 5353 del propio host. el paquete dns se construye y se parsea con código propio, incluida la compresión de nombres y la protección contra bucles de punteros.
    - **netbios:** consulta `NBSTAT` (rfc 1001/1002) al puerto 137 y se toma el nombre único con sufijo `0x00` (nombre de equipo).
 ---
+####   SERVICIOS MDNS
+fichero: `scanners/services.py` y `parse_ptr_records` en `scanners/protocols/dns.py`.
+   - solo se consulta a los dispositivos con mac aleatorizada (es lo único estable que se puede aprender de ellos) y se desactiva con `--no-identity`.
+   - consulta ptr unicast a `_services._dns-sd._udp.local` en el puerto 5353 del host. cada ptr de la respuesta es un tipo de servicio (`_airplay._tcp`, `_companion-link._tcp`...).
+   - las respuestas no son de fiar: solo se aceptan nombres con formato `_nombre._tcp|udp`, sin duplicados, con tope de 32 y con la misma protección contra bucles de punteros que el resto del parser.
+   - el silencio no es un error (mdns bloqueado, aislamiento de clientes, dispositivo en reposo): la lista queda vacía y la huella pierde ese rasgo. en la prueba en vivo de esta fase ningún móvil de la red respondió; el parser está probado con respuestas sintéticas y un servidor udp local, no con capturas reales.
+---
 ####   ESTIMACION DE SO
 fichero: `core/osguess.py`. el ttl observado se redondea al ttl inicial más probable (32, 64, 128 o 255): 64 → linux/unix/macos (también ios y android), 128 → windows, 255 → dispositivo de red. es una pista, no una huella completa. el equipo local muestra su so real.
 ---

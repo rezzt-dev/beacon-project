@@ -5,6 +5,7 @@ from ipaddress import IPv4Network
 from beacon.core.diff import detect_changes
 from beacon.core.engine import IpConflict
 from beacon.core.events import EventType, Severity
+from beacon.core.identity import IdentityMatch
 from beacon.core.models import DeviceStatus
 from conftest import T0, make_device
 
@@ -12,6 +13,8 @@ from conftest import T0, make_device
 NET = IPv4Network("192.168.1.0/24")
 ROUTER = "34:5d:9e:3f:2a:77"
 LAPTOP = "b0:a7:b9:dc:71:4a"
+PHONE = "8e:e7:35:fe:0c:c6"
+PHONE_2 = "9a:11:22:33:44:55"
 
 
 def kinds(events):
@@ -20,9 +23,40 @@ def kinds(events):
 
  # device lifecycle ->
 def test_new_device_raises_alert():
-  events = detect_changes({}, {ROUTER: make_device("192.168.1.1", ROUTER)}, network=NET)
+  previous = {LAPTOP: make_device("192.168.1.5", LAPTOP, trusted=True)}
+  current = {LAPTOP: make_device("192.168.1.5", LAPTOP), ROUTER: make_device("192.168.1.1", ROUTER)}
+  events = detect_changes(previous, current, network=NET)
   assert kinds(events) == [EventType.NEW_DEVICE]
   assert events[0].severity == Severity.ALERT
+  assert events[0].details["baseline"] is False
+
+
+def test_first_scan_is_a_baseline_not_a_wave_of_alerts():
+  current = {ROUTER: make_device("192.168.1.1", ROUTER), PHONE: make_device("192.168.1.9", PHONE, randomized_mac=True)}
+  events = detect_changes({}, current, network=NET)
+  assert kinds(events) == [EventType.NEW_DEVICE, EventType.NEW_DEVICE]
+  assert {e.severity for e in events} == {Severity.WARNING}
+  assert all(e.details["baseline"] for e in events)
+  assert not [e for e in events if e.severity == Severity.ALERT]
+
+
+def test_first_scan_still_alerts_on_a_high_risk_device():
+  exposed = make_device("192.168.1.66", LAPTOP, ports=(3389,))
+  events = detect_changes({}, {LAPTOP: exposed}, network=NET)
+  assert events[0].severity == Severity.ALERT
+  assert events[0].details["risk"] >= 55
+
+
+def test_identity_candidate_replaces_the_new_device_alert():
+  old = make_device("192.168.1.9", PHONE, randomized_mac=True, hostname="iphone-de-ana", alias="ana", status=DeviceStatus.OFFLINE)
+  new = make_device("192.168.1.10", PHONE_2, randomized_mac=True, hostname="iphone-de-ana")
+  match = IdentityMatch(PHONE_2, PHONE, 0.86, ("same hostname iphone-de-ana", "same 3 mdns services"))
+  events = detect_changes({PHONE: old, ROUTER: make_device("192.168.1.1", ROUTER)}, {PHONE_2: new}, network=NET, identity_candidates={PHONE_2: match})
+  candidate = [e for e in events if e.type == EventType.IDENTITY_CANDIDATE]
+  assert len(candidate) == 1 and candidate[0].severity == Severity.WARNING
+  assert "probably ana" in candidate[0].message and "0.86" in candidate[0].message
+  assert candidate[0].details["candidate_key"] == PHONE
+  assert EventType.NEW_DEVICE not in kinds(events)
 
 
 def test_local_host_is_registered_without_alert():

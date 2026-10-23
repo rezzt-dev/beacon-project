@@ -33,6 +33,9 @@ el proyecto combina sockets crudos, arp, concurrencia de un gran número de peti
 - **persistencia y alertas:** `sqlite` para guardar los dispositivos conocidos y detectar los desconocidos al compararlos con la base.
 - **exportación:** salida en `json`, `csv` y `html`.
 - **modo sin privilegios:** connect scan y lectura de la tabla arp del sistema como alternativa cuando no hay root.
+- **triage guiado:** `beacon review` recorre los avisos sin revisar ordenados por una puntuación de riesgo con motivos legibles; el primer escaneo no genera una alerta por cada host.
+- **identidad continua:** un móvil con mac aleatorizada que vuelve con otra mac se reconoce por hostname y servicios mdns y se propone como el mismo dispositivo (sin heredar la confianza).
+- **ritmo de presencia:** historial de conexiones (`beacon timeline`), mapa de calor semanal por dispositivo y avisos cuando alguien aparece fuera de su rutina o un equipo siempre encendido desaparece. son datos personales: se guardan solo en local, fuera de las exportaciones, y se borran con `beacon prune`.
 
 ### STACK TECNICO
 
@@ -68,8 +71,9 @@ los `scanners/` producen datos crudos, `core/` los limpia y genera eventos, `sto
 uv sync                          # o: pip install -e .
 uv run beacon vendors update     # descarga la base oui una vez
 uv run beacon scan               # primer escaneo
-uv run beacon devices trust-all  # marca el estado actual como conocido
+uv run beacon review             # revisa cada dispositivo con su riesgo y decide (o: devices trust-all)
 uv run beacon watch -o vivo.html # monitorización en vivo con alertas
+uv run beacon timeline --since 7d  # quién estuvo conectado y cuándo
 ```
 
 la documentación completa de la versión cli está en [`.docs/project-info/cli-base/`](.docs/project-info/cli-base/readme.md).
@@ -80,6 +84,7 @@ la documentación completa de la versión cli está en [`.docs/project-info/cli-
 - detecta macs aleatorizadas (bit "locally administered"), muy comunes en móviles, para no marcarlas como fabricante desconocido.
 - enriquece cada dispositivo con hostname (dns inverso, mdns, netbios), una estimación de so por ttl y banner de servicios.
 - mantiene un historial de estado (visto por primera vez, última vez visto, online/offline) y emite eventos de cambio: nuevo, desaparecido y puerto abierto nuevo.
+- relaciona las macs aleatorizadas de un mismo dispositivo con evidencias explícitas y guarda sesiones de presencia para detectar comportamientos fuera de patrón.
 
 ### CONSIDERACIONES TECNICAS
 
@@ -115,6 +120,9 @@ the project combines raw sockets, arp, real-time concurrency over a large number
 - **persistence and alerts:** `sqlite` to store known devices and detect unknown ones by comparing against the database.
 - **export:** output in `json`, `csv` and `html`.
 - **unprivileged mode:** connect scan and reading the system arp table as a fallback when root is not available.
+- **guided triage:** `beacon review` walks through unreviewed warnings sorted by a risk score with readable reasons; the first scan no longer raises one alert per host.
+- **continuous identity:** a phone with a randomized mac that comes back with another mac is recognized by hostname and mdns services and proposed as the same device (trust is never inherited).
+- **presence rhythm:** connection history (`beacon timeline`), a weekly heatmap per device and warnings when a device shows up outside its routine or an always-on one disappears. this is personal data: it stays local, out of exports, and `beacon prune` deletes it.
 
 ### TECH STACK
 
@@ -150,8 +158,9 @@ app/beacon/
 uv sync                          # or: pip install -e .
 uv run beacon vendors update     # download the oui database once
 uv run beacon scan               # first scan
-uv run beacon devices trust-all  # mark the current state as known
+uv run beacon review             # go through each device with its risk and decide (or: devices trust-all)
 uv run beacon watch -o live.html # live monitoring with alerts
+uv run beacon timeline --since 7d  # who was connected and when
 ```
 
 the full documentation of the cli version (in spanish) lives in [`.docs/project-info/cli-base/`](.docs/project-info/cli-base/readme.md).
@@ -162,6 +171,7 @@ the full documentation of the cli version (in spanish) lives in [`.docs/project-
 - detects randomized macs (the "locally administered" bit), very common on phones, so they are not flagged as unknown vendor.
 - enriches each device with hostname (reverse dns, mdns, netbios), an os estimate based on ttl and service banners.
 - keeps a state history (first seen, last seen, online/offline) and emits change events: new, disappeared and new open port.
+- links the randomized macs of one device with explicit evidence and stores presence sessions to detect behavior outside the usual pattern.
 
 ### TECHNICAL NOTES
 

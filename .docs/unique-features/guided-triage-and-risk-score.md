@@ -1,5 +1,5 @@
 ###  BEACON PROJECT  |  TRIAGE GUIADO Y PUNTUACION DE RIESGO
-> propuesta de funcionalidad (no implementada). convierte el flujo de alertas de beacon en un proceso de revisión explicado, priorizado y accionable desde un único comando: `beacon review`.
+> propuesta de funcionalidad (implementada). convierte el flujo de alertas de beacon en un proceso de revisión explicado, priorizado y accionable desde un único comando: `beacon review`.
 ---
 ####   1. IDENTIFICACION
 | campo | valor |
@@ -151,3 +151,17 @@ niveles: `low` (< 25), `medium` (25-54), `high` (≥ 55). la lista de puertos y 
    - reglas de riesgo por clase de dispositivo cuando exista la identidad continua (ver `continuous-device-identity.md`).
    - notificaciones filtradas por nivel de riesgo como suscriptores del `EventBus`.
    - factor de "hora inusual" aprovechando `presence-rhythm-anomalies.md`.
+
+---
+####   8. IMPLEMENTACION REAL Y DIFERENCIAS
+lo implementado cumple los criterios de aceptación de la sección 6. estas son las decisiones que la propuesta dejaba abiertas o que cambiaron al implementarla:
+   - **primer escaneo:** con el inventario vacío, `detect_changes` emite `new-device` como `warning` y solo como `alert` si la puntuación del dispositivo es `high`. así el primer `scan --fail-on-alert` termina con `0` y los avisos quedan pendientes para `beacon review`. los dispositivos posteriores siguen siendo `alert`.
+   - **`--trust-below NIVEL`:** confía en los pendientes cuyo riesgo es *como mucho* ese nivel (`low`, `medium` o `high`); siempre pide confirmación salvo `--yes`.
+   - **`--fail-on-risk N`:** solo cuentan los eventos `warning` y `alert`; un `device-offline` de un dispositivo arriesgado no hace fallar un cron.
+   - **eventos pendientes:** `warning` o `alert` con dispositivo y sin `acked_at`. `Event` ganó un campo opcional `id`. los `ip-conflict` no tienen dispositivo, así que no se pueden revisar y quedan en el historial.
+   - **revisión implícita:** `devices trust`, `trust-all` y `forget` también marcan los eventos como revisados, para que `review` no vuelva a mostrar lo ya decidido por otra vía.
+   - **columna `risk`:** es opcional (`devices list --risk`) y, por ser una petición explícita, es la última columna que desaparece en terminales estrechas (< 70 columnas) y no la primera tras `last seen`. el riesgo se escribe con texto (`● high 85`), no solo con color.
+   - **contexto del riesgo:** `assess` recibe los `port-opened` sin revisar y los `ip-conflict` de las últimas 24 h. si ningún escaneo incluyó puertos (`ports_ever_scanned`) se marca "ports not scanned".
+   - **teclas:** `typer.getchar` (typer 0.27 incluye su propio `click`, así que ya no es una dependencia transitiva importable). fin de entrada y ctrl+c/ctrl+d salen sin perder lo aplicado.
+   - **json:** el riesgo se añade en `devices list --json --risk`, `devices show --json` y `review --json`; no se incluye en las exportaciones.
+   - **sin calibrar:** los pesos son los de la propuesta y no se han contrastado con redes reales; la tabla `POINTS` de `core/risk.py` es el único sitio que hay que tocar.

@@ -3,7 +3,9 @@
 ---
 ####   LIMITACIONES CONOCIDAS
    - **modo sin privilegios:** un dispositivo que descarta icmp, no tiene ningún puerto tcp habitual accesible y cuya entrada arp no está en estado `REACHABLE` puede no detectarse en un escaneo concreto. el modo privilegiado no tiene esta limitación.
-   - **macs aleatorizadas:** algunos móviles cambian de mac al reconectarse, por lo que pueden aparecer como dispositivos nuevos. hoy no se correlacionan por hostname u otras huellas.
+   - **macs aleatorizadas:** algunos móviles cambian de mac al reconectarse. beacon propone el vínculo (`identity-candidate`, `devices candidates`) cuando coinciden hostname y servicios mdns, pero **los pesos y umbrales no se han calibrado con capturas reales**, y un móvil sin hostname ni respuesta mdns sigue apareciendo como dispositivo nuevo. el vínculo siempre lo confirma el usuario.
+   - **presencia:** los umbrales (14 días, 6 sesiones, 10 %, 90 %) son una propuesta sin calibrar con datos reales. los escaneos manuales esporádicos producen sesiones de un solo punto; el perfil solo es fiable con `watch` o con escaneos periódicos.
+   - **riesgo:** la puntuación es una heurística explicable, no un veredicto; los pesos están sin calibrar.
    - **solo ipv4:** no hay descubrimiento ipv6 (ndp).
    - **solo la lan local:** el barrido arp y la tabla arp solo tienen sentido en la red de la interfaz; escanear subredes remotas funciona únicamente con icmp/tcp y sin macs.
    - **windows:** sin icmp sin privilegios; el modo sin privilegios usa udp para cebar la caché arp y tcp para latencia.
@@ -18,7 +20,8 @@
 **descubrimiento y fingerprinting**
    - syn scan con scapy en modo privilegiado (extra previsto en `general-info.md`).
    - escucha pasiva con `AsyncSniffer` (arp, dhcp, mdns) para detectar dispositivos en tiempo real sin esperar al siguiente ciclo.
-   - correlación de macs aleatorizadas por hostname, huella dhcp o servicios mdns.
+   - huella dhcp (opción 55 y nombre de host) como rasgo adicional para la identidad de macs aleatorizadas.
+   - calibrar identidad, presencia y riesgo con capturas y datos reales de varias redes.
    - banners tls (certificado y cn) y más sondas por protocolo (ssh, smb, rtsp, upnp).
    - descubrimiento ipv6 con ndp.
 

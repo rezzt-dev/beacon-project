@@ -1,5 +1,5 @@
 ###  BEACON PROJECT  |  IDENTIDAD CONTINUA DE DISPOSITIVOS
-> propuesta de funcionalidad (no implementada). reconoce que un móvil con mac aleatorizada que vuelve con otra mac es el mismo dispositivo, con evidencias visibles y sin heredar la confianza de forma automática.
+> propuesta de funcionalidad (implementada). reconoce que un móvil con mac aleatorizada que vuelve con otra mac es el mismo dispositivo, con evidencias visibles y sin heredar la confianza de forma automática.
 ---
 ####   1. IDENTIFICACION
 | campo | valor |
@@ -166,3 +166,15 @@ CREATE INDEX idx_devices_identity ON devices (identity_id);
    - clasificación de tipo de dispositivo (móvil, tv, impresora) a partir de la misma huella, útil para el triage (`guided-triage-and-risk-score.md`).
    - exportar la historia por identidad (todas las macs usadas) en json/html.
    - cadena de macs por identidad como base de `presence-rhythm-anomalies.md`, que necesita una identidad estable para agrupar presencias.
+
+---
+####   8. IMPLEMENTACION REAL Y DIFERENCIAS
+la lógica de la sección 3 está implementada y probada con dispositivos y respuestas mdns simulados. **no se cumple todavía** la condición de "terminada" de la sección 6: la fase 0 (capturas mdns reales de varios móviles y qué rasgos son estables) no se hizo. en la prueba en vivo ningún dispositivo de la red respondió a la consulta de servicios, así que los pesos y umbrales siguen siendo la hipótesis inicial.
+   - **candidatos en vivo:** son los dispositivos aleatorizados conocidos que *no aparecen en ese mismo escaneo*, estén guardados como online u offline (antes del periodo de gracia el antiguo aún consta como online). si dos mac nuevas apuntan al mismo candidato, no se propone ninguna.
+   - **`devices candidates`:** se calcula bajo demanda sobre el inventario guardado y exige que la mac antigua se viera por última vez antes de que apareciera la nueva. lista también los vínculos *posibles* (0,50-0,79).
+   - **rasgo de red:** en lugar del patrón de latencia se usa que ambas ips estén en el mismo `/24` (0,05, desempate).
+   - **etapa de servicios:** no tiene barra propia; forma parte de la etapa de enriquecimiento existente.
+   - **`link`:** copia el alias solo a la mac que no tiene uno, marca como revisados los eventos de la mac nueva y pregunta por la confianza (`--trust` / `--no-trust` para no preguntar). `unlink` disuelve la identidad cuando queda una sola mac. el `first_seen` de cada mac no se reescribe: el bloque "identity" de `devices show` muestra las fechas de todas.
+   - **evidencias:** no se guardan; `devices show` las recalcula con los datos actuales de las macs vinculadas.
+   - **privacidad:** `Device.to_dict(fingerprint=False)` deja fuera `services`; `export --include-fingerprint` los añade al json. `devices show --json` sí los incluye.
+   - **`--no-identity`:** no sondea servicios ni busca candidatos; el resto del comportamiento es idéntico al anterior.

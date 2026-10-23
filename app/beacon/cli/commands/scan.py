@@ -13,6 +13,8 @@ from beacon.cli.commands.options import (
   LiveOutput,
   Mode,
   NoBanners,
+  NoIdentity,
+  NoPresence,
   NoResolve,
   Output,
   Ports,
@@ -22,8 +24,10 @@ from beacon.cli.commands.options import (
   Timeout,
 )
 from beacon.cli.context import get_app
-from beacon.core.events import EventBus, Severity
+from beacon.core.events import EventBus, EventType, Severity
 from beacon.core.models import ScanMode
+from beacon.core.presence import SESSION_GAP
+from beacon.core.risk import events_at_risk
 from beacon.export import export_to_file
 from beacon.pipeline import ScanError, ScanOptions
 from beacon.scanners.network import TargetError
@@ -59,6 +63,18 @@ def scan(
   fail_on_alert: Annotated[
     bool, typer.Option("--fail-on-alert", help=f"exit with code {EXIT_ALERTS} when an alert is raised (cron/ci).")
   ] = False,
+  fail_on_risk: Annotated[
+    int | None,
+    typer.Option(
+      "--fail-on-risk",
+      min=0,
+      max=100,
+      help=f"exit with code {EXIT_ALERTS} when a warning or alert hits a device with at least this risk score (cron/ci).",
+      show_default=False,
+    ),
+  ] = None,
+  no_identity: NoIdentity = False,
+  no_presence: NoPresence = False,
 ) -> None:
   """run one discovery scan: find devices, fingerprint them and report changes."""
   app = get_app(ctx)
@@ -73,6 +89,8 @@ def scan(
     resolve_hostnames=not no_resolve,
     grab_banners=not no_banners,
     offline_grace=float(grace),
+    identity=not no_identity,
+    presence=not no_presence,
     save=not no_save,
   )
   report = app.run_scan(options, show_progress=not json_out)
@@ -86,8 +104,13 @@ def scan(
     console.print(report_summary(report))
     if report.first_run:
       console.print(
-        "[accent]first scan:[/accent] review the devices above and run "
-        "[bold]beacon devices trust-all[/bold] to set them as your known baseline."
+        "[accent]first scan:[/accent] run [bold]beacon review[/bold] to go through the devices above and "
+        "build your known baseline (or [bold]beacon devices trust-all[/bold] to accept them all)."
+      )
+    if any(e.type == EventType.IDENTITY_CANDIDATE for e in report.events):
+      console.print(
+        "[accent]possible known device:[/accent] a phone seems to be back with a new private mac. "
+        "run [bold]beacon devices candidates[/bold] to confirm it."
       )
 
   if output is not None:
@@ -96,6 +119,10 @@ def scan(
 
   if fail_on_alert and report.alerts:
     raise typer.Exit(EXIT_ALERTS)
+  if fail_on_risk is not None:
+    ports_known = bool(options.ports) or app.repository.ports_ever_scanned()
+    if events_at_risk(report.devices, report.events, fail_on_risk, ports_known):
+      raise typer.Exit(EXIT_ALERTS)
 
 
  # watch ->
@@ -110,6 +137,8 @@ def watch(
   timeout: Timeout = 1.5,
   no_resolve: NoResolve = False,
   output: LiveOutput = None,
+  no_identity: NoIdentity = False,
+  no_presence: NoPresence = False,
   bell: Annotated[bool, typer.Option("--bell", help="ring the terminal bell on every alert.")] = False,
   grace: Annotated[
     int | None,
@@ -127,6 +156,10 @@ def watch(
     latency_samples=samples,
     resolve_hostnames=not no_resolve,
     offline_grace=float(2 * interval if grace is None else grace),
+    identity=not no_identity,
+    presence=not no_presence,
+    # scans are `interval` apart: a stay is only broken when several of them are missed
+    presence_gap=max(SESSION_GAP.total_seconds(), 3.0 * interval),
   )
   view = WatchView(interval=interval)
   bus = EventBus()
