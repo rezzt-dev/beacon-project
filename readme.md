@@ -41,23 +41,38 @@ el proyecto combina sockets crudos, arp, concurrencia de un gran número de peti
 | lenguaje | python (con posibilidad de reescribir scanners en rust mediante `pyo3`) |
 | red y protocolos | `scapy`, `asyncio` |
 | fabricante por mac | `mac-vendor-lookup` o fichero `manuf` de wireshark |
-| interfaz | `rich` / `textual` |
-| cli | `typer` o `click` |
+| interfaz | `rich` (cli actual), `textual` (tui prevista) |
+| cli | `typer` |
 | persistencia | `sqlite` |
-| modelos de datos | `dataclass` o `pydantic` |
+| modelos de datos | `dataclass` |
+| interfaces de red | `psutil` |
 
 ### ARQUITECTURA
 
 ```
-beacon/
-├── scanners/    # arp, puertos y latencia: producen datos crudos
-├── core/        # modelos, normalización y diff contra la base: limpia y genera eventos
+app/beacon/
+├── scanners/    # arp, icmp, puertos, latencia y hostnames: producen datos crudos
+├── core/        # modelos, motor de limpieza y diff contra la base: limpia y genera eventos
 ├── storage/     # sqlite: guarda el estado
-├── ui/          # rich/textual: consumen los eventos
-└── export/      # json, csv y html: consumen los eventos
+├── ui/          # rich: tablas, progreso y vista en vivo
+├── export/      # json, csv y html
+├── cli/         # comandos typer
+└── pipeline.py  # orquesta un escaneo completo
 ```
 
 los `scanners/` producen datos crudos, `core/` los limpia y genera eventos, `storage/` guarda el estado, y `ui/` y `export/` consumen esos eventos. si algún scanner se queda limitado en rendimiento, puede reescribirse en rust e integrarse con `pyo3`.
+
+### INSTALACION Y USO
+
+```bash
+uv sync                          # o: pip install -e .
+uv run beacon vendors update     # descarga la base oui una vez
+uv run beacon scan               # primer escaneo
+uv run beacon devices trust-all  # marca el estado actual como conocido
+uv run beacon watch -o vivo.html # monitorización en vivo con alertas
+```
+
+la documentación completa de la versión cli está en [`.docs/project-info/cli-base/`](.docs/project-info/cli-base/readme.md).
 
 ### MOTOR DE LIMPIEZA DE DATOS
 
@@ -108,23 +123,38 @@ the project combines raw sockets, arp, real-time concurrency over a large number
 | language | python (with the option to rewrite scanners in rust through `pyo3`) |
 | network and protocols | `scapy`, `asyncio` |
 | mac vendor lookup | `mac-vendor-lookup` or wireshark `manuf` file |
-| interface | `rich` / `textual` |
-| cli | `typer` or `click` |
+| interface | `rich` (current cli), `textual` (planned tui) |
+| cli | `typer` |
 | persistence | `sqlite` |
-| data models | `dataclass` or `pydantic` |
+| data models | `dataclass` |
+| network interfaces | `psutil` |
 
 ### ARCHITECTURE
 
 ```
-beacon/
-├── scanners/    # arp, ports and latency: produce raw data
-├── core/        # models, normalization and diff against the database: cleans data and emits events
+app/beacon/
+├── scanners/    # arp, icmp, ports, latency and hostnames: produce raw data
+├── core/        # models, cleaning engine and diff against the database: cleans data and emits events
 ├── storage/     # sqlite: stores the state
-├── ui/          # rich/textual: consume events
-└── export/      # json, csv and html: consume events
+├── ui/          # rich: tables, progress and live view
+├── export/      # json, csv and html
+├── cli/         # typer commands
+└── pipeline.py  # orchestrates a full scan
 ```
 
 `scanners/` produce raw data, `core/` cleans it and emits events, `storage/` persists the state, and `ui/` and `export/` consume those events. if a scanner becomes a performance bottleneck, it can be rewritten in rust and integrated through `pyo3`.
+
+### INSTALLATION AND USAGE
+
+```bash
+uv sync                          # or: pip install -e .
+uv run beacon vendors update     # download the oui database once
+uv run beacon scan               # first scan
+uv run beacon devices trust-all  # mark the current state as known
+uv run beacon watch -o live.html # live monitoring with alerts
+```
+
+the full documentation of the cli version (in spanish) lives in [`.docs/project-info/cli-base/`](.docs/project-info/cli-base/readme.md).
 
 ### DATA CLEANING ENGINE
 

@@ -1,0 +1,47 @@
+[project]
+name = "beacon"
+version = "0.1.0"
+description = "terminal tool that discovers devices on the local network, identifies vendors, scans ports, measures latency and alerts on unknown devices"
+readme = "readme.md"
+requires-python = ">=3.11"
+license = { file = "license.md" }
+authors = [{ name = "rezzt-dev" }]
+dependencies = [
+  "typer>=0.12",
+  "rich>=13.7",
+  "psutil>=5.9",
+  "scapy>=2.5",
+]
+
+[project.scripts]
+beacon = "beacon.cli.main:run"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app/beacon"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["app"]
+
+[tool.ruff]
+line-length = 100
+indent-width = 2
+target-version = "py311"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = ["E111", "E114", "E117", "E501", "B008"]
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
