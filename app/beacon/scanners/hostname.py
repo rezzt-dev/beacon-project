@@ -4,6 +4,7 @@ import logging
 import random
 import socket
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 from beacon.core.engine import clean_hostname
 from beacon.scanners.protocols.dns import (
@@ -32,7 +33,7 @@ class _FirstDatagram(asyncio.DatagramProtocol):
   def __init__(self, future: asyncio.Future[bytes]) -> None:
     self.future = future
 
-  def datagram_received(self, data: bytes, _addr: tuple[str, int]) -> None:
+  def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
     if not self.future.done():
       self.future.set_result(data)
 

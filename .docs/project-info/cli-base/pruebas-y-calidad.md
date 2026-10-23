@@ -4,7 +4,7 @@
 ####   EJECUCION
 ```bash
 uv sync                          # instala también el grupo dev (pytest, ruff)
-uv run pytest                    # 71 tests, < 1 segundo, sin acceso a red
+uv run pytest                    # 76 tests, < 1 segundo, sin acceso a red
 uv run ruff check app tests      # lint (pyflakes, pycodestyle, isort, bugbear, pyupgrade, simplify)
 ```
 la configuración está en `pyproject.toml`: `pythonpath = ["app"]` para pytest y sangría de 2 espacios para ruff, igual que el resto del código.
@@ -19,6 +19,7 @@ la configuración está en `pyproject.toml`: `pythonpath = ["app"]` para pytest 
 | `tests/test_scanners.py` | parsers de `ip neigh`, `/proc/net/arp`, `arp -a` (macos y windows) y `/proc/net/route`; paquetes icmp; dns/mdns con compresión y bucles de punteros; netbios `NBSTAT`; especificación de puertos; escaneo real contra un servidor tcp local con banner. |
 | `tests/test_storage.py` | migraciones y rechazo de esquemas futuros, ida y vuelta de dispositivos, sincronización de puertos, conservación de alias y confianza, cambios a offline, búsqueda por referencia, filtros de eventos, estadísticas y atomicidad de `save_scan`. |
 | `tests/test_export.py` | detección de formato, json válido sin ficheros temporales residuales, protección contra inyección en csv y escape en html. |
+| `tests/test_ui.py` | columnas responsive de la tabla de dispositivos (ip y mac nunca truncadas) y vista de `watch` tras un escaneo fallido. |
 | `tests/test_cli.py` | `--version`, inventario vacío, referencia inexistente, búsqueda de fabricantes, exportación y validación de puertos, con un `BEACON_HOME` temporal. |
 ---
 ####   VERIFICACION MANUAL

@@ -7,7 +7,7 @@ esta carpeta documenta la primera fase de desarrollo de beacon, centrada únicam
 estado al cierre de la fase:
    - **versión:** `0.1.0`.
    - **python:** 3.11 o superior (verificado en 3.13 y 3.14).
-   - **tests:** 71 pruebas automáticas en verde, sin acceso a red.
+   - **tests:** 76 pruebas automáticas en verde, sin acceso a red.
    - **verificación real:** escaneo completo de una red `/24` doméstica en modo sin privilegios en 5-8 segundos, con fabricantes, latencia, hostnames, puertos y banners.
 ---
 ####   INDICE

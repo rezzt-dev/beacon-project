@@ -31,6 +31,7 @@ class WatchView:
     self.stage_total: int | None = None
     self.stage_done = 0
     self.next_scan_at: float | None = None
+    self.last_error: str | None = None
 
   # progress reporter protocol ->
   def stage(self, name: str, total: int | None = None) -> None:
@@ -48,8 +49,16 @@ class WatchView:
 
   def update(self, report: ScanReport, inventory: Sequence[Device]) -> None:
     self.cycle += 1
+    self.last_error = None
     self.report = report
     self.devices = sorted(inventory, key=lambda d: d.status != DeviceStatus.ONLINE)
+    self.stage_name = "idle"
+    self.next_scan_at = time.monotonic() + self.interval
+
+  def fail(self, message: str) -> None:
+    """a scan failed (network down, interface gone): keep the last results and retry next cycle."""
+    self.cycle += 1
+    self.last_error = message
     self.stage_name = "idle"
     self.next_scan_at = time.monotonic() + self.interval
 
@@ -69,9 +78,11 @@ class WatchView:
 
   def __rich__(self) -> RenderableType:
     parts: list[RenderableType] = [self._header()]
+    if self.last_error:
+      parts.append(Text(f"last scan failed: {self.last_error} (retrying)", style="alert"))
     if self.report is not None:
       parts.append(report_summary(self.report))
-    parts.append(devices_table(self.devices))
+    parts.append(devices_table(self.devices, show_ports=any(d.open_ports for d in self.devices)))
     if self.events:
       parts.append(events_table(list(self.events), title="latest events"))
     return Group(*parts)

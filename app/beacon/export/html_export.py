@@ -119,7 +119,7 @@ def render_html(devices: Sequence[Device], events: Sequence[Event], meta: dict[s
 <div class="meta">{subtitle}</div>
 <div class="cards">{cards}</div>
 <div class="wrap"><table>
-<thead><tr><th>ip</th><th>mac</th><th>name</th><th>vendor</th><th>os (ttl)</th><th>latency</th><th>jitter</th>
+<thead><tr><th>ip</th><th>mac</th><th>name</th><th>vendor</th><th>os</th><th>latency</th><th>jitter</th>
 <th>open ports</th><th>status</th><th>trusted</th><th>last seen (utc)</th></tr></thead>
 <tbody>{device_rows}</tbody>
 </table></div>

@@ -12,6 +12,7 @@ from beacon.core.events import Event, Severity
 from beacon.core.models import Device, DeviceStatus, Latency
 from beacon.core.report import ScanReport
 from beacon.scanners.network import InterfaceInfo
+from beacon.ui.console import console
 
 
  # formatting helpers ->
@@ -60,33 +61,55 @@ SEVERITY_STYLE = {Severity.INFO: "info", Severity.WARNING: "warning", Severity.A
 
 
  # tables ->
-def devices_table(devices: Sequence[Device], title: str | None = None, show_ports: bool = True) -> Table:
+# optional columns are dropped, in this order, as the terminal gets narrower; ip, mac and name always stay
+_COLUMN_DROP_ORDER: tuple[tuple[str, int], ...] = (
+  ("last seen", 150),
+  ("os", 135),
+  ("open ports", 120),
+  ("latency", 105),
+  ("vendor", 90),
+)
+
+
+def visible_columns(width: int, show_ports: bool = True) -> set[str]:
+  """optional device table columns that fit a terminal `width` without truncating ips or macs."""
+  hidden = {name for name, minimum in _COLUMN_DROP_ORDER if width < minimum}
+  columns = {"last seen", "os", "latency", "vendor"} | ({"open ports"} if show_ports else set())
+  return columns - hidden
+
+
+def devices_table(
+  devices: Sequence[Device], title: str | None = None, show_ports: bool = True, width: int | None = None
+) -> Table:
+  shown = visible_columns(width or console.width, show_ports)
   table = Table(title=title, box=box.SIMPLE_HEAVY, header_style="bold", title_justify="left", expand=False)
   table.add_column("", width=1, no_wrap=True)
-  table.add_column("ip", style="ip", no_wrap=True)
-  table.add_column("mac", style="mac", no_wrap=True)
+  table.add_column("ip", style="ip", no_wrap=True, min_width=15)
+  table.add_column("mac", style="mac", no_wrap=True, min_width=17)
   table.add_column("name", overflow="fold")
-  table.add_column("vendor", overflow="ellipsis", no_wrap=True, max_width=30)
-  table.add_column("os (ttl)", overflow="ellipsis", no_wrap=True, max_width=20)
-  table.add_column("latency", no_wrap=True)
-  if show_ports:
+  if "vendor" in shown:
+    table.add_column("vendor", overflow="ellipsis", no_wrap=True, max_width=30)
+  if "os" in shown:
+    table.add_column("os (ttl)", overflow="ellipsis", no_wrap=True, max_width=20)
+  if "latency" in shown:
+    table.add_column("latency", no_wrap=True)
+  if "open ports" in shown:
     table.add_column("open ports", overflow="fold", max_width=30)
-  table.add_column("last seen", style="muted", no_wrap=True)
+  if "last seen" in shown:
+    table.add_column("last seen", style="muted", no_wrap=True)
 
   for d in devices:
-    vendor = Text(d.display_vendor, style="" if d.vendor else "muted")
-    row: list[RenderableType] = [
-      status_marker(d),
-      d.ip,
-      d.mac or "—",
-      fmt_name(d),
-      vendor,
-      Text(d.os_guess or "—", style="" if d.os_guess else "muted"),
-      fmt_latency(d.latency),
-    ]
-    if show_ports:
+    row: list[RenderableType] = [status_marker(d), d.ip, d.mac or "—", fmt_name(d)]
+    if "vendor" in shown:
+      row.append(Text(d.display_vendor, style="" if d.vendor else "muted"))
+    if "os" in shown:
+      row.append(Text(d.os_guess or "—", style="" if d.os_guess else "muted"))
+    if "latency" in shown:
+      row.append(fmt_latency(d.latency))
+    if "open ports" in shown:
       row.append(fmt_ports(d))
-    row.append(fmt_time(d.last_seen))
+    if "last seen" in shown:
+      row.append(fmt_time(d.last_seen))
     table.add_row(*row)
   if not devices:
     table.caption = "no devices"

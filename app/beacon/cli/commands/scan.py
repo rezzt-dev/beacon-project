@@ -25,7 +25,8 @@ from beacon.cli.context import get_app
 from beacon.core.events import EventBus, Severity
 from beacon.core.models import ScanMode
 from beacon.export import export_to_file
-from beacon.pipeline import ScanOptions
+from beacon.pipeline import ScanError, ScanOptions
+from beacon.scanners.network import TargetError
 from beacon.scanners.ports import parse_port_spec
 from beacon.ui.console import console, err_console, success
 from beacon.ui.live import WatchView
@@ -136,7 +137,13 @@ def watch(
   try:
     with Live(view, console=console, refresh_per_second=2, transient=False):
       while True:
-        report = app.run_scan(options, bus=bus, progress=view)
+        try:
+          report = app.run_scan(options, bus=bus, progress=view)
+        except (TargetError, ScanError, OSError) as exc:
+          # a dropped wi-fi or a vanished interface must not end a monitoring session
+          view.fail(str(exc))
+          time.sleep(interval)
+          continue
         inventory = app.repository.list_devices()
         view.update(report, inventory)
         if output is not None:
