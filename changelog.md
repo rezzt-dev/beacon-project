@@ -45,6 +45,7 @@
 - cambiar el primer escaneo: los dispositivos descubiertos con el inventario vacío son avisos (`warning`) y solo son alertas si su riesgo es alto; el mensaje de `scan` sugiere `beacon review` en lugar de `trust-all`
 - cambiar `devices trust`, `trust-all` y `forget` para que marquen como revisados los eventos pendientes del dispositivo
 - actualizar la documentación de `.docs/project-info/cli-base/` y marcar las tres propuestas de `.docs/unique-features/` como implementadas
+- añadir los skills de terceros de `fullstack-dev-skills` en `.docs/skills/` para su uso como herramientas de desarrollo del proyecto
 
 #### CORREGIDO
 - corregir la tabla de dispositivos, que truncaba ip y mac en terminales estrechas: ahora oculta columnas opcionales según el ancho (`visible_columns`)
@@ -101,6 +102,7 @@
 - change the first scan: devices found with an empty inventory are warnings and only become alerts when their risk is high; the `scan` message suggests `beacon review` instead of `trust-all`
 - change `devices trust`, `trust-all` and `forget` so they mark the device's pending events as reviewed
 - update the documentation in `.docs/project-info/cli-base/` and mark the three proposals in `.docs/unique-features/` as implemented
+- add the third-party `fullstack-dev-skills` skills in `.docs/skills/` for use as development tooling for the project
 
 #### FIXED
 - fix the device table truncating ips and macs on narrow terminals: optional columns are now hidden by terminal width (`visible_columns`)
