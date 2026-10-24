@@ -8,7 +8,18 @@ import typer
 from rich.logging import RichHandler
 
 from beacon import __version__
-from beacon.cli.commands import devices, inventory, review, scan, timeline, tools, vendors
+from beacon.cli.commands import (
+  admin,
+  devices,
+  inventory,
+  live,
+  review,
+  scan,
+  service,
+  timeline,
+  tools,
+  vendors,
+)
 from beacon.cli.context import AppContext
 from beacon.config import Settings
 from beacon.pipeline import ScanError
@@ -27,9 +38,11 @@ app = typer.Typer(
 )
 app.command(rich_help_panel="scanning")(scan.scan)
 app.command(rich_help_panel="scanning")(scan.watch)
+app.command(rich_help_panel="scanning")(live.live)
 app.command(rich_help_panel="tools")(tools.ports)
 app.command(rich_help_panel="tools")(tools.ping)
 app.command(rich_help_panel="tools")(tools.interfaces)
+app.command(rich_help_panel="tools")(tools.listen)
 app.command(rich_help_panel="inventory")(review.review)
 app.command(rich_help_panel="inventory")(inventory.events)
 app.command(rich_help_panel="inventory")(timeline.timeline)
@@ -37,7 +50,14 @@ app.command(rich_help_panel="inventory", name="export")(inventory.export)
 app.command(rich_help_panel="inventory")(inventory.status)
 app.command(rich_help_panel="inventory")(inventory.prune)
 app.add_typer(devices.app, name="devices", rich_help_panel="inventory")
+app.command(rich_help_panel="inventory")(admin.networks)
+app.add_typer(admin.profiles_app, name="profiles", rich_help_panel="scanning")
 app.add_typer(vendors.app, name="vendors", rich_help_panel="tools")
+app.command(rich_help_panel="maintenance")(admin.backup)
+app.command(rich_help_panel="maintenance")(admin.restore)
+app.command(rich_help_panel="maintenance")(admin.retention)
+app.command(rich_help_panel="tools")(admin.demo)
+app.add_typer(service.app, name="service", rich_help_panel="maintenance")
 
 
 def _version(value: bool) -> None:

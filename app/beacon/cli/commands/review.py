@@ -1,8 +1,6 @@
  # import libraries ->
 import json
 import sys
-from dataclasses import dataclass
-from enum import StrEnum
 from typing import Annotated
 
 import typer
@@ -10,10 +8,9 @@ from rich.markup import escape
 from rich.text import Text
 
 from beacon.cli.commands.options import JsonOut
-from beacon.cli.context import AppContext, get_app
-from beacon.core.events import Event
-from beacon.core.models import Device
-from beacon.core.risk import RiskAssessment, RiskLevel, suggest_alias
+from beacon.cli.context import get_app
+from beacon.core.risk import RiskLevel, suggest_alias
+from beacon.services.review import ReviewAction, ReviewCase, apply_action, pending_cases
 from beacon.storage import Repository
 from beacon.ui.console import console, error, success
 from beacon.ui.render import review_card, review_table
@@ -22,55 +19,6 @@ from beacon.ui.render import review_card, review_table
  # constants ->
 EXIT_USAGE = 2
 PROMPT = "[t]rust  [a] trust with alias  [i]gnore  [f]orget  [s]kip  [q]uit > "
-
-
- # review cases ->
-class ReviewAction(StrEnum):
-  TRUST = "t"
-  TRUST_ALIAS = "a"
-  IGNORE = "i"
-  FORGET = "f"
-  SKIP = "s"
-  QUIT = "q"
-
-
-@dataclass(slots=True)
-class ReviewCase:
-  """a device with events nobody has looked at yet, and why it matters."""
-
-  device: Device
-  risk: RiskAssessment
-  events: list[Event]
-
-
-def pending_cases(app: AppContext) -> list[ReviewCase]:
-  """pending events grouped by device and sorted by risk, the riskiest first."""
-  grouped: dict[str, list[Event]] = {}
-  for event in app.repository.list_pending_events():
-    if event.device_key:
-      grouped.setdefault(event.device_key, []).append(event)
-  devices = {k: d for k, d in app.repository.load_devices().items() if k in grouped}
-  risks = app.assess_devices(devices.values())
-  cases = [ReviewCase(device, risks[key], grouped[key]) for key, device in devices.items()]
-  return sorted(cases, key=lambda c: (-c.risk.score, c.device.ip))
-
-
-def apply_action(repo: Repository, device: Device, action: ReviewAction, alias: str | None = None) -> str:
-  """carry out one decision on exactly one device and say what happened. an empty alias is a plain trust."""
-  if action == ReviewAction.TRUST_ALIAS:
-    if name := (alias or "").strip():
-      repo.set_alias(device.key, name)
-    action = ReviewAction.TRUST
-  if action == ReviewAction.TRUST:
-    repo.set_trusted(device.key, True)
-    return "trusted"
-  if action == ReviewAction.IGNORE:
-    repo.ack_events(device.key)
-    return "ignored"
-  if action == ReviewAction.FORGET:
-    repo.delete_device(device.key)
-    return "forgotten"
-  return "skipped"
 
 
  # presentation ->
@@ -106,7 +54,7 @@ def review(
 ) -> None:
   """go through the devices that raised alerts, see why they matter and decide one by one."""
   app = get_app(ctx)
-  cases = pending_cases(app)
+  cases = pending_cases(app.repository)
 
   if json_out:
     typer.echo(

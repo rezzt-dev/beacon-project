@@ -1,0 +1,404 @@
+{
+  "hardware": {
+    "platform": "Linux-6.18.56-1-lts-x86_64-with-glibc2.44",
+    "python": "3.13.13",
+    "cpus": 12,
+    "cpu": "Intel(R) Core(TM) i7-10750H CPU @ 2.60GHz",
+    "memory_gb": 31.2
+  },
+  "dataset": {
+    "50": {
+      "devices": 50,
+      "events": 1000,
+      "scans": 169,
+      "measurements": 5114,
+      "sessions": 261,
+      "generate_seconds": 0.3,
+      "db_mb": 1.4
+    },
+    "500": {
+      "devices": 500,
+      "events": 10000,
+      "scans": 169,
+      "measurements": 51169,
+      "sessions": 2460,
+      "generate_seconds": 3.4,
+      "db_mb": 11.9
+    },
+    "5000": {
+      "devices": 5000,
+      "events": 100000,
+      "scans": 73,
+      "measurements": 220202,
+      "sessions": 13246,
+      "generate_seconds": 18.1,
+      "db_mb": 71.3
+    }
+  },
+  "api": {
+    "50": {
+      "devices page (50, sorted by ip)": {
+        "p50_ms": 3.1,
+        "p95_ms": 3.4,
+        "max_ms": 3.5,
+        "n": 30,
+        "first_ms": 3.5,
+        "bytes": 62004
+      },
+      "devices page sorted by risk": {
+        "p50_ms": 3.1,
+        "p95_ms": 3.5,
+        "max_ms": 3.6,
+        "n": 30,
+        "first_ms": 3.0,
+        "bytes": 62004
+      },
+      "devices search q=phone": {
+        "p50_ms": 1.7,
+        "p95_ms": 2.1,
+        "max_ms": 3.3,
+        "n": 30,
+        "first_ms": 3.3,
+        "bytes": 4130
+      },
+      "device detail": {
+        "p50_ms": 2.4,
+        "p95_ms": 2.8,
+        "max_ms": 2.9,
+        "n": 30,
+        "first_ms": 2.8,
+        "bytes": 9761
+      },
+      "events page (50)": {
+        "p50_ms": 2.2,
+        "p95_ms": 2.3,
+        "max_ms": 2.7,
+        "n": 30,
+        "first_ms": 2.2,
+        "bytes": 15085
+      },
+      "events filtered (alerts)": {
+        "p50_ms": 2.2,
+        "p95_ms": 2.3,
+        "max_ms": 2.7,
+        "n": 30,
+        "first_ms": 2.3,
+        "bytes": 14638
+      },
+      "summary": {
+        "p50_ms": 2.7,
+        "p95_ms": 4.1,
+        "max_ms": 4.5,
+        "n": 30,
+        "first_ms": 4.5,
+        "bytes": 12024
+      },
+      "review queue": {
+        "p50_ms": 4.0,
+        "p95_ms": 5.1,
+        "max_ms": 5.2,
+        "n": 30,
+        "first_ms": 3.9,
+        "bytes": 44005
+      },
+      "services": {
+        "p50_ms": 3.7,
+        "p95_ms": 4.9,
+        "max_ms": 5.3,
+        "n": 30,
+        "first_ms": 3.6,
+        "bytes": 16706
+      },
+      "status": {
+        "p50_ms": 1.8,
+        "p95_ms": 2.7,
+        "max_ms": 3.1,
+        "n": 30,
+        "first_ms": 3.1,
+        "bytes": 1477
+      },
+      "edit alias (write)": {
+        "p50_ms": 1.9,
+        "p95_ms": 2.3,
+        "max_ms": 2.6,
+        "n": 30
+      }
+    },
+    "500": {
+      "devices page (50, sorted by ip)": {
+        "p50_ms": 4.7,
+        "p95_ms": 5.8,
+        "max_ms": 6.1,
+        "n": 30,
+        "first_ms": 5.2,
+        "bytes": 62507
+      },
+      "devices page sorted by risk": {
+        "p50_ms": 6.0,
+        "p95_ms": 7.1,
+        "max_ms": 7.6,
+        "n": 30,
+        "first_ms": 6.5,
+        "bytes": 75465
+      },
+      "devices search q=phone": {
+        "p50_ms": 2.7,
+        "p95_ms": 3.2,
+        "max_ms": 12.6,
+        "n": 30,
+        "first_ms": 12.6,
+        "bytes": 36119
+      },
+      "device detail": {
+        "p50_ms": 3.3,
+        "p95_ms": 4.6,
+        "max_ms": 4.7,
+        "n": 30,
+        "first_ms": 3.8,
+        "bytes": 10422
+      },
+      "events page (50)": {
+        "p50_ms": 2.3,
+        "p95_ms": 2.8,
+        "max_ms": 2.9,
+        "n": 30,
+        "first_ms": 2.9,
+        "bytes": 15212
+      },
+      "events filtered (alerts)": {
+        "p50_ms": 2.7,
+        "p95_ms": 3.2,
+        "max_ms": 3.3,
+        "n": 30,
+        "first_ms": 3.2,
+        "bytes": 14810
+      },
+      "summary": {
+        "p50_ms": 8.0,
+        "p95_ms": 9.1,
+        "max_ms": 9.9,
+        "n": 30,
+        "first_ms": 8.3,
+        "bytes": 12919
+      },
+      "review queue": {
+        "p50_ms": 7.1,
+        "p95_ms": 7.4,
+        "max_ms": 8.0,
+        "n": 30,
+        "first_ms": 7.0,
+        "bytes": 50833
+      },
+      "services": {
+        "p50_ms": 18.5,
+        "p95_ms": 19.3,
+        "max_ms": 19.5,
+        "n": 30,
+        "first_ms": 17.3,
+        "bytes": 87486
+      },
+      "status": {
+        "p50_ms": 3.4,
+        "p95_ms": 3.9,
+        "max_ms": 4.0,
+        "n": 30,
+        "first_ms": 3.9,
+        "bytes": 1481
+      },
+      "edit alias (write)": {
+        "p50_ms": 2.8,
+        "p95_ms": 3.1,
+        "max_ms": 3.3,
+        "n": 30
+      }
+    },
+    "5000": {
+      "devices page (50, sorted by ip)": {
+        "p50_ms": 29.8,
+        "p95_ms": 43.9,
+        "max_ms": 81.9,
+        "n": 30,
+        "first_ms": 31.0,
+        "bytes": 62503
+      },
+      "devices page sorted by risk": {
+        "p50_ms": 34.2,
+        "p95_ms": 45.4,
+        "max_ms": 47.7,
+        "n": 30,
+        "first_ms": 32.6,
+        "bytes": 79245
+      },
+      "devices search q=phone": {
+        "p50_ms": 5.5,
+        "p95_ms": 6.7,
+        "max_ms": 263.4,
+        "n": 30,
+        "first_ms": 263.4,
+        "bytes": 63171
+      },
+      "device detail": {
+        "p50_ms": 27.0,
+        "p95_ms": 30.8,
+        "max_ms": 34.0,
+        "n": 30,
+        "first_ms": 25.0,
+        "bytes": 9208
+      },
+      "events page (50)": {
+        "p50_ms": 3.6,
+        "p95_ms": 5.7,
+        "max_ms": 5.9,
+        "n": 30,
+        "first_ms": 4.5,
+        "bytes": 15229
+      },
+      "events filtered (alerts)": {
+        "p50_ms": 12.0,
+        "p95_ms": 12.9,
+        "max_ms": 13.3,
+        "n": 30,
+        "first_ms": 11.5,
+        "bytes": 15021
+      },
+      "summary": {
+        "p50_ms": 79.5,
+        "p95_ms": 82.9,
+        "max_ms": 84.2,
+        "n": 30,
+        "first_ms": 82.9,
+        "bytes": 13354
+      },
+      "review queue": {
+        "p50_ms": 57.6,
+        "p95_ms": 62.2,
+        "max_ms": 71.9,
+        "n": 30,
+        "first_ms": 57.4,
+        "bytes": 52380
+      },
+      "services": {
+        "p50_ms": 182.7,
+        "p95_ms": 224.0,
+        "max_ms": 232.6,
+        "n": 30,
+        "first_ms": 177.8,
+        "bytes": 92910
+      },
+      "status": {
+        "p50_ms": 32.6,
+        "p95_ms": 36.5,
+        "max_ms": 40.6,
+        "n": 30,
+        "first_ms": 33.5,
+        "bytes": 1483
+      },
+      "edit alias (write)": {
+        "p50_ms": 23.6,
+        "p95_ms": 25.4,
+        "max_ms": 31.6,
+        "n": 30
+      }
+    }
+  },
+  "propagation": {
+    "500": {
+      "p50_ms": 502.7,
+      "p95_ms": 512.2,
+      "max_ms": 512.2,
+      "n": 10
+    }
+  },
+  "filter": {
+    "500": {
+      "p50_ms": 148.9,
+      "p95_ms": 173.7,
+      "max_ms": 173.7,
+      "n": 8,
+      "debounce_ms": 75
+    }
+  },
+  "storage": {
+    "current": {
+      "50": {
+        "load_devices_ms": 1.8,
+        "find_device_by_ip_ms": 0.1,
+        "list_events_50_ms": 0.0,
+        "pending_events_ms": 0.0,
+        "html_report_ms": 5.6
+      },
+      "500": {
+        "load_devices_ms": 16.9,
+        "find_device_by_ip_ms": 0.3,
+        "list_events_50_ms": 0.0,
+        "pending_events_ms": 0.0,
+        "html_report_ms": 50.3
+      },
+      "5000": {
+        "load_devices_ms": 183.9,
+        "find_device_by_ip_ms": 2.9,
+        "list_events_50_ms": 0.3,
+        "pending_events_ms": 775.5,
+        "html_report_ms": 600.3
+      }
+    }
+  },
+  "queries": {
+    "50": {
+      "inventory_uncached": {
+        "ms": 6.2,
+        "sql_statements": 7,
+        "total": 50
+      },
+      "inventory_cached": {
+        "ms": 1.6,
+        "sql_statements": 2,
+        "total": 50
+      },
+      "inventory_resorted": {
+        "ms": 1.0,
+        "sql_statements": 2,
+        "total": 50
+      }
+    },
+    "500": {
+      "inventory_uncached": {
+        "ms": 50.9,
+        "sql_statements": 7,
+        "total": 500
+      },
+      "inventory_cached": {
+        "ms": 2.7,
+        "sql_statements": 2,
+        "total": 500
+      },
+      "inventory_resorted": {
+        "ms": 3.5,
+        "sql_statements": 2,
+        "total": 500
+      }
+    },
+    "5000": {
+      "inventory_uncached": {
+        "ms": 512.2,
+        "sql_statements": 7,
+        "total": 5000
+      },
+      "inventory_cached": {
+        "ms": 24.2,
+        "sql_statements": 2,
+        "total": 5000
+      },
+      "inventory_resorted": {
+        "ms": 27.7,
+        "sql_statements": 2,
+        "total": 5000
+      }
+    }
+  },
+  "process_rss_mb": {
+    "50": 51.4,
+    "500": 61.0,
+    "5000": 107.0
+  }
+}

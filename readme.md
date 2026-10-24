@@ -2,12 +2,12 @@
 
 # BEACON
 
-**terminal tool that discovers every device on your local network, identifies vendors by mac, scans open ports, measures latency and alerts when an unknown device appears.**
+**discover, understand and monitor every device on your local network: what is there, what changed, what deserves attention and what you can do about it.**
 
 ![python](https://img.shields.io/badge/python-3.11%2B-3776ab?style=flat-square&logo=python&logoColor=white)
 ![status](https://img.shields.io/badge/estado-en%20desarrollo-orange?style=flat-square)
 ![license](https://img.shields.io/badge/license-all%20rights%20reserved-red?style=flat-square)
-![platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey?style=flat-square)
+![platform](https://img.shields.io/badge/probado-linux-lightgrey?style=flat-square)
 
 [castellano](#castellano) · [english](#english)
 
@@ -19,78 +19,79 @@
 
 ### DESCRIPCION
 
-beacon es una herramienta de terminal pensada para administradores de sistemas y perfiles de seguridad. descubre todos los dispositivos conectados a la red local, identifica el fabricante a partir de la mac, escanea puertos abiertos, mide la latencia y avisa cuando aparece un dispositivo desconocido.
+beacon descubre los dispositivos de la red local, los identifica (fabricante, nombre, servicios, certificados), mide su latencia y sus puertos, guarda su historia y explica qué ha cambiado y por qué algo merece atención. todo se queda en tu equipo: no hay cuentas en la nube ni se envía nada fuera salvo que configures un canal de notificación.
 
-el proyecto combina sockets crudos, arp, concurrencia de un gran número de peticiones en tiempo real y parseo de protocolos, junto con un motor de limpieza de datos que permite obtener una salida profesional y exportable.
+tiene tres formas de uso sobre los mismos datos y las mismas reglas:
 
-### CARACTERISTICAS
+| experiencia | para qué | cómo |
+|---|---|---|
+| **aplicación live** | navegar el inventario, revisar avisos, editar alias y confianza, ver presencia, identidades y servicios, lanzar y programar escaneos, configurar alertas. se actualiza en vivo. | `beacon live` |
+| **cli** | escanear, revisar y consultar desde la terminal o desde scripts (`--json`). | `beacon scan`, `beacon review`, `beacon devices` … |
+| **informe html** | una página autónoma de solo lectura que funciona sin conexión y sin beacon; puede regenerarse en cada ciclo. | `beacon export informe.html`, `beacon watch -o vivo.html` |
 
-- **descubrimiento arp:** barrido de la red con broadcast ethernet usando `scapy` (`srp`).
-- **fabricante por mac:** base oui del ieee cargada en local, para que funcione sin conexión.
-- **escaneo de puertos:** connect scan concurrente con `asyncio`, un `semaphore` y timeouts, sin necesidad de root. como extra, syn scan con `scapy`.
-- **latencia:** tiempo de respuesta arp/icmp más rtt de conexión tcp, con varias muestras para calcular media, mínimo, máximo y jitter.
-- **tabla en vivo con preview:** interfaz en terminal con `rich` (`live` + `table`) o `textual`, con paneles, filtros y detalle del dispositivo.
-- **persistencia y alertas:** `sqlite` para guardar los dispositivos conocidos y detectar los desconocidos al compararlos con la base.
-- **exportación:** salida en `json`, `csv` y `html`.
-- **modo sin privilegios:** connect scan y lectura de la tabla arp del sistema como alternativa cuando no hay root.
-- **triage guiado:** `beacon review` recorre los avisos sin revisar ordenados por una puntuación de riesgo con motivos legibles; el primer escaneo no genera una alerta por cada host.
-- **identidad continua:** un móvil con mac aleatorizada que vuelve con otra mac se reconoce por hostname y servicios mdns y se propone como el mismo dispositivo (sin heredar la confianza).
-- **ritmo de presencia:** historial de conexiones (`beacon timeline`), mapa de calor semanal por dispositivo y avisos cuando alguien aparece fuera de su rutina o un equipo siempre encendido desaparece. son datos personales: se guardan solo en local, fuera de las exportaciones, y se borran con `beacon prune`.
-
-### STACK TECNICO
-
-| área | tecnología |
-|---|---|
-| lenguaje | python (con posibilidad de reescribir scanners en rust mediante `pyo3`) |
-| red y protocolos | `scapy`, `asyncio` |
-| fabricante por mac | `mac-vendor-lookup` o fichero `manuf` de wireshark |
-| interfaz | `rich` (cli actual), `textual` (tui prevista) |
-| cli | `typer` |
-| persistencia | `sqlite` |
-| modelos de datos | `dataclass` |
-| interfaces de red | `psutil` |
-
-### ARQUITECTURA
-
-```
-app/beacon/
-├── scanners/    # arp, icmp, puertos, latencia y hostnames: producen datos crudos
-├── core/        # modelos, motor de limpieza y diff contra la base: limpia y genera eventos
-├── storage/     # sqlite: guarda el estado
-├── ui/          # rich: tablas, progreso y vista en vivo
-├── export/      # json, csv y html
-├── cli/         # comandos typer
-└── pipeline.py  # orquesta un escaneo completo
-```
-
-los `scanners/` producen datos crudos, `core/` los limpia y genera eventos, `storage/` guarda el estado, y `ui/` y `export/` consumen esos eventos. si algún scanner se queda limitado en rendimiento, puede reescribirse en rust e integrarse con `pyo3`.
-
-### INSTALACION Y USO
+### INSTALACION
 
 ```bash
-uv sync                          # o: pip install -e .
-uv run beacon vendors update     # descarga la base oui una vez
-uv run beacon scan               # primer escaneo
-uv run beacon review             # revisa cada dispositivo con su riesgo y decide (o: devices trust-all)
-uv run beacon watch -o vivo.html # monitorización en vivo con alertas
-uv run beacon timeline --since 7d  # quién estuvo conectado y cuándo
+uv sync                              # o: pip install -e .
+uv run beacon vendors update         # descarga la base de fabricantes (oui) una vez
 ```
 
-la documentación completa de la versión cli está en [`.docs/project-info/cli-base/`](.docs/project-info/cli-base/readme.md).
+python 3.11 o superior. no hace falta node ni navegador para usar la cli; la aplicación live se sirve desde el propio paquete.
 
-### MOTOR DE LIMPIEZA DE DATOS
+### INICIO RAPIDO
 
-- normaliza las macs a un único formato y deduplica fusionando por mac (una ip puede cambiar, la mac no).
-- detecta macs aleatorizadas (bit "locally administered"), muy comunes en móviles, para no marcarlas como fabricante desconocido.
-- enriquece cada dispositivo con hostname (dns inverso, mdns, netbios), una estimación de so por ttl y banner de servicios.
-- mantiene un historial de estado (visto por primera vez, última vez visto, online/offline) y emite eventos de cambio: nuevo, desaparecido y puerto abierto nuevo.
-- relaciona las macs aleatorizadas de un mismo dispositivo con evidencias explícitas y guarda sesiones de presencia para detectar comportamientos fuera de patrón.
+```bash
+uv run beacon live                   # abre la aplicación en el navegador y guía el primer descubrimiento
+uv run beacon live --monitor 60      # igual, monitorizando cada 60 s desde el arranque
+uv run beacon scan -p top            # un escaneo desde la terminal, con los 100 puertos más habituales
+uv run beacon review                 # decide uno a uno sobre los dispositivos pendientes
+uv run beacon demo /tmp/demo.db      # crea una red simulada para probar sin escanear nada
+uv run beacon --db /tmp/demo.db live # y ábrela
+```
 
-### CONSIDERACIONES TECNICAS
+`beacon live` escucha en `127.0.0.1` y abre un enlace de acceso privado (`beacon live --url` lo vuelve a mostrar). `scripts/beacon-live.sh` (o `.bat`) arranca la aplicación; con `--report` mantiene el informe html regenerado por `watch`.
 
-- `scapy.sniff` bloquea, así que se usa `AsyncSniffer` o un executor para integrarlo con `asyncio`.
-- scapy es lento enviando miles de paquetes por segundo, pero en una lan no supone un problema.
-- los privilegios (root/npcap en windows) condicionan el diseño, por lo que el modo sin root debe funcionar como alternativa.
+### QUE HACE HOY
+
+- **descubrimiento:** barrido arp con `scapy` cuando hay privilegios; sin ellos, icmp propio, tabla arp del sistema y confirmación tcp. vecinos ipv6 desde la tabla ndp del sistema (nunca se recorre un /64).
+- **identificación:** fabricante por oui sin conexión, macs aleatorias, hostname (dns inverso, dns del router, mdns, netbios), servicios mdns, estimación de so por ttl.
+- **puertos con estados honestos:** abierto, cerrado (rechazado), sin respuesta, error de sonda y "no examinado". escanear un subconjunto no cierra lo que no examinó; un timeout no es un cierre. cobertura y fecha por dispositivo.
+- **protocolo observado e inferido:** el banner (ssh, http, telnet, ftp, vnc…) o un handshake tls pesan más que el número de puerto; los certificados tls se registran (sujeto, emisor, nombres, validez) sin afirmar que sean de confianza.
+- **riesgo explicable (reglas v2):** cada punto tiene motivo, base (observado, inferido, histórico, contexto) y fecha; ssh es administración cifrada, no protocolo en claro; el gateway y el propio equipo no tienen inmunidad; sin datos de puertos el riesgo es "incompleto", no "seguro".
+- **revisión guiada:** cola por riesgo, confiar (con alias sugerido), revisado sin confiar, posponer con vencimiento, olvidar, y propuestas de identidad.
+- **identidad continua:** propone que una mac aleatoria nueva es un equipo conocido con evidencias; se confirma o se rechaza (para siempre), nunca hereda confianza.
+- **presencia:** sesiones, mapa semanal y anomalías que solo cuentan las horas en que beacon estaba vigilando; zona horaria configurable; datos locales que no salen en informes salvo que los incluyas.
+- **redes:** el mismo rango detrás de otro router es otra red; inventarios separados.
+- **historia:** cada escaneo queda registrado como completo, incompleto, fallido o cancelado, con etapas y errores; latencia y pérdida por escaneo; comparación entre escaneos que explica las diferencias de alcance.
+- **alertas:** políticas por tipo, gravedad, dispositivo y riesgo, con umbral en ventana, enfriamiento, silencios y ventanas de mantenimiento; entrega por notificación de escritorio o webhook firmado, con reintentos acotados e idempotencia. nada se envía por defecto.
+- **escucha pasiva opcional:** arp, dhcp y mdns con privilegios, para escanear en cuanto aparece una mac desconocida.
+- **operación:** perfiles de escaneo, copias de seguridad coherentes y restauración verificada, retención con vista previa, servicio de usuario (`beacon service install`) y registro de diagnóstico.
+
+### PREVISTO, NO DISPONIBLE
+
+- syn scan con `scapy` en modo privilegiado.
+- interfaz de terminal a pantalla completa con `textual`.
+- reescritura de scanners en rust con `pyo3` si una medición lo justifica (las actuales no lo hacen).
+- calibrar con capturas reales los pesos de riesgo, identidad y presencia.
+
+### PRIVACIDAD Y SEGURIDAD
+
+- todo vive en una base sqlite local (`beacon status` muestra la ruta). la presencia, las huellas de identidad, las notas y el responsable no salen en informes salvo selección explícita; los informes pueden seudonimizarse (oculta identificadores, no garantiza anonimato).
+- la aplicación live solo responde en loopback, valida `Host` y `Origin`, usa sesión firmada `HttpOnly`/`SameSite=Strict`, token csrf, límites de tamaño y frecuencia y una csp sin código en línea ni recursos remotos. abrirla a la red local exige `--allow-lan` (y conviene `--tls-cert`/`--tls-key`).
+- la web solo escanea rangos privados de hasta /16 definidos en perfiles; nunca recibe un objetivo arbitrario ni ejecuta comandos construidos con datos del navegador.
+
+### PLATAFORMAS
+
+| plataforma | estado |
+|---|---|
+| linux, python 3.13 | probado: pruebas unitarias, de api, de cli y de navegador (chromium), instalación del wheel. |
+| linux con privilegios (barrido arp, escucha pasiva) | analizadores probados con paquetes construidos; sin verificación en vivo con root. |
+| macos, windows; python 3.11 y 3.12 | configurados en la integración continua; no verificados en esta entrega. |
+
+### DOCUMENTACION
+
+- [evolución integral: arquitectura, api, decisiones, rendimiento y seguimiento](.docs/project-info/evolucion/readme.md)
+- [documentación de la fase cli](.docs/project-info/cli-base/readme.md)
 
 ### AVISO LEGAL
 
@@ -106,78 +107,79 @@ todos los derechos reservados © 2026 rezzt-dev. consulta el fichero [`license.m
 
 ### DESCRIPTION
 
-beacon is a terminal tool built for system administrators and security professionals. it discovers every device connected to the local network, identifies the vendor from the mac address, scans open ports, measures latency and alerts when an unknown device appears.
+beacon discovers the devices on your local network, identifies them (vendor, name, services, certificates), measures their latency and ports, keeps their history and explains what changed and why something deserves attention. everything stays on your machine: no cloud accounts, and nothing is sent anywhere unless you set up a notification channel.
 
-the project combines raw sockets, arp, real-time concurrency over a large number of requests and protocol parsing, along with a data cleaning engine that produces a professional, exportable output.
+three ways to use it, over the same data and the same rules:
 
-### FEATURES
+| experience | for | how |
+|---|---|---|
+| **live app** | browse the inventory, review warnings, edit aliases and trust, see presence, identities and services, run and schedule scans, set up alerts. updates live. | `beacon live` |
+| **cli** | scan, review and query from a terminal or from scripts (`--json`). | `beacon scan`, `beacon review`, `beacon devices` … |
+| **html report** | a standalone, read-only page that works offline and without beacon; can be regenerated every cycle. | `beacon export report.html`, `beacon watch -o live.html` |
 
-- **arp discovery:** network sweep with ethernet broadcast using `scapy` (`srp`).
-- **mac vendor lookup:** ieee oui database loaded locally, so it works offline.
-- **port scanning:** concurrent connect scan with `asyncio`, a `semaphore` and timeouts, no root required. as an extra, syn scan with `scapy`.
-- **latency:** arp/icmp response time plus tcp connection rtt, with multiple samples to compute average, minimum, maximum and jitter.
-- **live table with preview:** terminal interface with `rich` (`live` + `table`) or `textual`, with panels, filters and device details.
-- **persistence and alerts:** `sqlite` to store known devices and detect unknown ones by comparing against the database.
-- **export:** output in `json`, `csv` and `html`.
-- **unprivileged mode:** connect scan and reading the system arp table as a fallback when root is not available.
-- **guided triage:** `beacon review` walks through unreviewed warnings sorted by a risk score with readable reasons; the first scan no longer raises one alert per host.
-- **continuous identity:** a phone with a randomized mac that comes back with another mac is recognized by hostname and mdns services and proposed as the same device (trust is never inherited).
-- **presence rhythm:** connection history (`beacon timeline`), a weekly heatmap per device and warnings when a device shows up outside its routine or an always-on one disappears. this is personal data: it stays local, out of exports, and `beacon prune` deletes it.
-
-### TECH STACK
-
-| area | technology |
-|---|---|
-| language | python (with the option to rewrite scanners in rust through `pyo3`) |
-| network and protocols | `scapy`, `asyncio` |
-| mac vendor lookup | `mac-vendor-lookup` or wireshark `manuf` file |
-| interface | `rich` (current cli), `textual` (planned tui) |
-| cli | `typer` |
-| persistence | `sqlite` |
-| data models | `dataclass` |
-| network interfaces | `psutil` |
-
-### ARCHITECTURE
-
-```
-app/beacon/
-├── scanners/    # arp, icmp, ports, latency and hostnames: produce raw data
-├── core/        # models, cleaning engine and diff against the database: cleans data and emits events
-├── storage/     # sqlite: stores the state
-├── ui/          # rich: tables, progress and live view
-├── export/      # json, csv and html
-├── cli/         # typer commands
-└── pipeline.py  # orchestrates a full scan
-```
-
-`scanners/` produce raw data, `core/` cleans it and emits events, `storage/` persists the state, and `ui/` and `export/` consume those events. if a scanner becomes a performance bottleneck, it can be rewritten in rust and integrated through `pyo3`.
-
-### INSTALLATION AND USAGE
+### INSTALLATION
 
 ```bash
-uv sync                          # or: pip install -e .
-uv run beacon vendors update     # download the oui database once
-uv run beacon scan               # first scan
-uv run beacon review             # go through each device with its risk and decide (or: devices trust-all)
-uv run beacon watch -o live.html # live monitoring with alerts
-uv run beacon timeline --since 7d  # who was connected and when
+uv sync                              # or: pip install -e .
+uv run beacon vendors update         # download the vendor (oui) database once
 ```
 
-the full documentation of the cli version (in spanish) lives in [`.docs/project-info/cli-base/`](.docs/project-info/cli-base/readme.md).
+python 3.11 or newer. the cli needs neither node nor a browser; the live app is served from the package itself.
 
-### DATA CLEANING ENGINE
+### QUICK START
 
-- normalizes macs to a single format and deduplicates by merging on mac (an ip can change, the mac does not).
-- detects randomized macs (the "locally administered" bit), very common on phones, so they are not flagged as unknown vendor.
-- enriches each device with hostname (reverse dns, mdns, netbios), an os estimate based on ttl and service banners.
-- keeps a state history (first seen, last seen, online/offline) and emits change events: new, disappeared and new open port.
-- links the randomized macs of one device with explicit evidence and stores presence sessions to detect behavior outside the usual pattern.
+```bash
+uv run beacon live                   # opens the app in the browser and guides the first discovery
+uv run beacon live --monitor 60      # same, monitoring every 60 s from the start
+uv run beacon scan -p top            # one scan from the terminal, with the 100 most common ports
+uv run beacon review                 # decide one by one on the pending devices
+uv run beacon demo /tmp/demo.db      # create a simulated network to try it without scanning
+uv run beacon --db /tmp/demo.db live # and open it
+```
 
-### TECHNICAL NOTES
+`beacon live` listens on `127.0.0.1` and opens a private sign-in link (`beacon live --url` prints it again). `scripts/beacon-live.sh` (or `.bat`) starts the app; with `--report` it keeps the html report regenerated by `watch`.
 
-- `scapy.sniff` blocks, so `AsyncSniffer` or an executor is used to integrate it with `asyncio`.
-- scapy is slow when sending thousands of packets per second, but on a lan this is not a problem.
-- privileges (root/npcap on windows) shape the design, so the unprivileged mode must work as a fallback.
+### WHAT IT DOES TODAY
+
+- **discovery:** arp sweep with `scapy` when privileged; otherwise its own icmp, the system arp table and tcp confirmation. ipv6 neighbours from the system ndp table (a /64 is never swept).
+- **identification:** offline oui vendor, randomized macs, hostname (reverse dns, router dns, mdns, netbios), mdns services, os estimate from ttl.
+- **ports with honest states:** open, closed (refused), no answer, probe error and "not examined". scanning a subset never closes what it did not examine; a timeout is not a close. coverage and date per device.
+- **observed vs inferred protocol:** a banner (ssh, http, telnet, ftp, vnc…) or a tls handshake outweighs the port number; tls certificates are recorded (subject, issuer, names, validity) without claiming trust.
+- **explainable risk (rules v2):** every point has a reason, a basis (observed, inferred, history, context) and a date; ssh is encrypted administration, not a cleartext protocol; the gateway and this host get no immunity; without port data the risk is "incomplete", never "safe".
+- **guided review:** risk-ordered queue, trust (with a suggested alias), reviewed-but-untrusted, snooze until a date, forget, and identity proposals.
+- **continuous identity:** proposes that a new random mac is a known device, with evidence; confirm or reject (for good); trust is never inherited.
+- **presence:** sessions, a weekly map and anomalies that only count the hours beacon was watching; configurable time zone; local data left out of reports unless you include it.
+- **networks:** the same range behind another router is another network, with its own inventory.
+- **history:** every scan is recorded as complete, incomplete, failed or cancelled, with stages and errors; latency and loss per scan; scan comparison that explains differences in scope.
+- **alerts:** policies by type, severity, device and risk, with threshold in a window, cooldown, silences and maintenance windows; delivery as a desktop notification or a signed webhook, with bounded retries and idempotency. nothing is sent by default.
+- **optional passive listening:** arp, dhcp and mdns with privileges, to scan as soon as an unknown mac shows up.
+- **operations:** scan profiles, consistent backups and verified restore, retention with preview, user service (`beacon service install`) and a diagnostic log.
+
+### PLANNED, NOT AVAILABLE
+
+- syn scan with `scapy` in privileged mode.
+- a full-screen terminal ui with `textual`.
+- rewriting scanners in rust with `pyo3` if a measurement justifies it (current ones do not).
+- calibrating the risk, identity and presence weights with real captures.
+
+### PRIVACY AND SECURITY
+
+- everything lives in a local sqlite database (`beacon status` shows where). presence, identity fingerprints, notes and owners stay out of reports unless explicitly chosen; reports can be pseudonymized (hides identifiers, does not guarantee anonymity).
+- the live app only answers on loopback, checks `Host` and `Origin`, uses a signed `HttpOnly`/`SameSite=Strict` session, a csrf token, size and rate limits and a csp with no inline code and no remote resources. opening it to the lan requires `--allow-lan` (and preferably `--tls-cert`/`--tls-key`).
+- the web app only scans private ranges of at most /16 defined in profiles; it never accepts an arbitrary target nor runs commands built from browser input.
+
+### PLATFORMS
+
+| platform | status |
+|---|---|
+| linux, python 3.13 | tested: unit, api, cli and browser (chromium) tests, wheel installation. |
+| linux with privileges (arp sweep, passive listening) | parsers tested with crafted packets; not verified live with root. |
+| macos, windows; python 3.11 and 3.12 | configured in continuous integration; not verified in this delivery. |
+
+### DOCUMENTATION
+
+- [full evolution (in spanish): architecture, api, decisions, performance and tracking](.docs/project-info/evolucion/readme.md)
+- [documentation of the cli phase (in spanish)](.docs/project-info/cli-base/readme.md)
 
 ### LEGAL NOTICE
 
@@ -186,3 +188,14 @@ use beacon only on networks you own or have explicit authorization to test. scan
 ### LICENSE
 
 all rights reserved © 2026 rezzt-dev. see the [`license.md`](license.md) file for more information.
+
+### VALIDACION DE LA VERSION 0.2.0
+
+La continuación de la evolución y sus límites están registrados en [validación final](.docs/project-info/evolucion/validacion-final.md), [seguimiento](.docs/project-info/evolucion/seguimiento.md) y [rendimiento medido](.docs/project-info/evolucion/rendimiento.md). Se ha verificado localmente en Linux con Python 3.13 y Chromium; la matriz de otras plataformas está configurada en CI y pendiente de ejecución remota. La migración automática sigue en el esquema v5 y conserva una copia previa para bases antiguas.
+
+En discos sin enlaces simbólicos (por ejemplo, este repositorio en exFAT), crea el entorno fuera del proyecto:
+
+```bash
+UV_PROJECT_ENVIRONMENT="$HOME/.cache/beacon/venv" uv sync --group dev --group browser
+UV_PROJECT_ENVIRONMENT="$HOME/.cache/beacon/venv" uv run beacon live
+```

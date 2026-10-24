@@ -26,6 +26,8 @@ SESSION_GAP = timedelta(minutes=15)
 # a device gone for longer than this is no longer a routine break but simply a device that left
 MAX_ROUTINE_ABSENCE = timedelta(days=7)
 ABSENCE_GAP_FACTOR = 3
+# below this share of monitored time an absence cannot be told apart from beacon not watching
+MIN_MONITORED = 0.5
 HOUR = timedelta(hours=1)
 DAY_NAMES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 _FULL_BUCKET = 0.5
@@ -78,6 +80,8 @@ class PresenceProfile:
   span: timedelta = timedelta(0)
   coverage: float = 0.0
   typical_gap: timedelta = timedelta(0)
+  # share of the recent window beacon was actually watching; none when that is unknown
+  monitored: float | None = None
 
   @property
   def observed(self) -> bool:
@@ -99,10 +103,23 @@ class PresenceProfile:
     return present / total if total else None
 
 
+def _overlaps(start: datetime, end: datetime, windows: Sequence[tuple[datetime, datetime]]) -> bool:
+  return any(low <= end and high >= start for low, high in windows)
+
+
 def build_profile(
-  sessions: Sequence[Session], now: datetime, weeks: int = PROFILE_WEEKS, tz: tzinfo | None = None
+  sessions: Sequence[Session],
+  now: datetime,
+  weeks: int = PROFILE_WEEKS,
+  tz: tzinfo | None = None,
+  observed: Sequence[tuple[datetime, datetime]] | None = None,
 ) -> PresenceProfile:
-  """weekly presence grid from the sessions of the last `weeks` weeks. pure: `now` and `tz` are injected."""
+  """weekly presence grid from the sessions of the last `weeks` weeks. pure: `now` and `tz` are injected.
+
+  hours are walked in utc and labelled in `tz`, so a daylight saving change makes a 23 or 25 hour
+  day instead of shifting the grid. with `observed` (the windows beacon was really watching) an
+  hour nobody watched is neither "present" nor "absent": it simply does not count.
+  """
   tz = tz or local_tz()
   ordered = sorted(sessions, key=lambda s: s.started_at)
   if not ordered:
@@ -119,9 +136,13 @@ def build_profile(
     last = max(first, math.ceil((session.end - origin) / HOUR) - 1)
     present.update(range(max(first, 0), min(last, slots - 1) + 1))
 
+  windows = sorted(observed) if observed is not None else None
   counts: dict[tuple[int, int], list[int]] = {}
   for index in range(slots):
-    local = (origin + index * HOUR).astimezone(tz)
+    slot = origin + index * HOUR
+    if windows is not None and index not in present and not _overlaps(slot, slot + HOUR, windows):
+      continue
+    local = slot.astimezone(tz)
     cell = counts.setdefault((local.weekday(), local.hour), [0, 0])
     cell[0] += index in present
     cell[1] += 1
@@ -130,21 +151,53 @@ def build_profile(
     cells={cell: (hit, total) for cell, (hit, total) in counts.items()},
     sessions=len(ordered),
     span=now - ordered[0].started_at,
-    coverage=_coverage(ordered, now),
+    coverage=_coverage(ordered, now, windows),
     typical_gap=_typical_gap(ordered),
+    monitored=_monitored(ordered, now, windows),
   )
 
 
-def _coverage(sessions: Sequence[Session], now: datetime) -> float:
-  """share of the last `ROUTINE_DAYS` (or of the observed span, if shorter) the device was present."""
-  start = max(now - timedelta(days=ROUTINE_DAYS), sessions[0].started_at)
+def _recent_start(sessions: Sequence[Session], now: datetime) -> datetime:
+  return max(now - timedelta(days=ROUTINE_DAYS), sessions[0].started_at)
+
+
+def watched_seconds(start: datetime, end: datetime, windows: Sequence[tuple[datetime, datetime]], slack: timedelta) -> float:
+  """seconds of `[start, end]` covered by observation windows, each widened by `slack` (a scan vouches for a while)."""
+  total = 0.0
+  cursor = start
+  for low, high in windows:
+    low, high = max(low - slack, cursor), min(high + slack, end)
+    if high > low:
+      total += (high - low).total_seconds()
+      cursor = high
+  return total
+
+
+def _coverage(sessions: Sequence[Session], now: datetime, windows: Sequence[tuple[datetime, datetime]] | None = None) -> float:
+  """share of the last `ROUTINE_DAYS` (or of the observed span, if shorter) the device was present.
+
+  with observation windows the share is of the time beacon was watching, not of wall-clock time.
+  """
+  start = _recent_start(sessions, now)
   window = (now - start).total_seconds()
+  if windows is not None:
+    window = watched_seconds(start, now, windows, SESSION_GAP)
   if window <= 0:
     return 0.0
   covered = sum(
     max(0.0, (min(s.end, now) - max(s.started_at, start)).total_seconds()) for s in sessions
   )
   return min(1.0, covered / window)
+
+
+def _monitored(sessions: Sequence[Session], now: datetime, windows: Sequence[tuple[datetime, datetime]] | None) -> float | None:
+  if windows is None:
+    return None
+  start = _recent_start(sessions, now)
+  span = (now - start).total_seconds()
+  if span <= 0:
+    return None
+  return min(1.0, watched_seconds(start, now, windows, SESSION_GAP) / span)
 
 
 def _typical_gap(sessions: Sequence[Session]) -> timedelta:
@@ -234,6 +287,8 @@ def detect_anomalies(
       continue
     if profile.coverage < ROUTINE_COVERAGE:
       continue
+    if profile.monitored is not None and profile.monitored < MIN_MONITORED:
+      continue  # beacon was mostly not watching: an absence would only be a guess
     limit = max(ABSENCE_GAP_FACTOR * profile.typical_gap, MIN_ABSENCE)
     away = now - device.last_seen
     if away <= limit or away > MAX_ROUTINE_ABSENCE:

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>beacon live · sign in</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/tokens.css">
+<link rel="stylesheet" href="/assets/css/app.css">
+<script type="module" src="/assets/js/login.js"></script>
+</head>
+<body class="centered">
+<main class="signin" id="main">
+  <h1><span class="brand-mark" aria-hidden="true"></span> beacon live</h1>
+  <p id="signin-status" role="status" aria-live="polite">Signing in…</p>
+  <form id="signin-form" hidden>
+    <label for="token">Sign-in token</label>
+    <input id="token" name="token" type="password" autocomplete="off" spellcheck="false" required>
+    <p class="hint">Run <code>beacon live --url</code> in a terminal and open the link it prints, or paste the part after <code>#token=</code>.</p>
+    <button class="btn primary" type="submit">Sign in</button>
+  </form>
+</main>
+</body>
+</html>

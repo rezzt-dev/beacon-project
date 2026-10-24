@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>beacon live</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/tokens.css">
+<link rel="stylesheet" href="/assets/css/app.css">
+<script type="module" src="/assets/js/main.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="app" id="app">
+  <header class="topbar" id="topbar">
+    <button type="button" class="icon-btn menu-btn" id="menu-btn" aria-controls="sidebar" aria-expanded="false" hidden></button>
+    <a class="brand" href="/" id="brand"><span class="brand-mark" aria-hidden="true"></span><span>beacon</span></a>
+    <div class="topbar-network" id="network-slot"></div>
+    <form class="global-search" id="global-search" role="search"></form>
+    <output class="health" id="health" aria-live="polite"></output>
+    <div class="live-state" id="live-state"></div>
+  </header>
+  <nav class="sidebar" id="sidebar" aria-label="sections"></nav>
+  <main class="main" id="main" tabindex="-1">
+    <noscript><p class="empty">beacon live needs javascript. the html report (`beacon export report.html`) works without it.</p></noscript>
+  </main>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="sr-only" id="sr-status" role="status" aria-live="polite"></div>
+<div class="sr-only" id="sr-alert" role="alert" aria-live="assertive"></div>
+</body>
+</html>

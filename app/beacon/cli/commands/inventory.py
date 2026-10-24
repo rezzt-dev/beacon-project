@@ -13,6 +13,7 @@ from beacon.core.events import EventType, Severity
 from beacon.core.models import DeviceStatus, utcnow
 from beacon.export import export_to_file
 from beacon.scanners.privileges import can_open_raw_socket, scapy_available
+from beacon.services.risk import assess_devices
 from beacon.ui.console import console, success
 from beacon.ui.render import events_table
 
@@ -63,6 +64,7 @@ def export(
     "network": last["network"] if last else None,
     "include_fingerprint": include_fingerprint,
     "ports_known": repo.ports_ever_scanned(),
+    "risks": assess_devices(repo, devices),
   }
   written = export_to_file(path, devices, recent, meta, fmt)
   success(f"exported {len(devices)} devices to {written}")
@@ -101,7 +103,13 @@ def status(ctx: typer.Context) -> None:
     ("database", str(app.settings.db_path)),
     ("oui database", f"{vendors.source} ({len(vendors):,} prefixes)" if len(vendors) else "[warning]missing - run `beacon vendors update`[/warning]"),
     ("devices", f"{stats['total']} known · {stats['online']} online · {stats['untrusted']} untrusted · {stats['randomized']} randomized macs"),
-    ("scans", f"{stats['scans']}" + (f" · last {last['finished_at']} on {last['network']}" if last else "")),
+    ("scans", f"{stats['scans']}" + (f" · last valid {last['finished_at']} on {last['network']}" if last else "")),
+    ("networks", " · ".join(f"{n['id']}: {n['name'] or n['cidr']}" for n in app.repository.list_networks()) or "none yet"),
+    (
+      "scanning now",
+      " · ".join(f"{lease['kind']} on {lease['scope'][4:]} (pid {lease['pid']})" for lease in app.repository.list_leases() if lease["active"])
+      or "nothing",
+    ),
     ("raw sockets", "[ok]available[/ok]" if raw else "[warning]not available (unprivileged mode)[/warning]"),
     ("scapy", "[ok]installed[/ok]" if scapy_available() else "[warning]missing[/warning]"),
   ):

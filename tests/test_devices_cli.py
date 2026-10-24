@@ -8,9 +8,10 @@ from typer.testing import CliRunner
 from beacon.cli.main import app
 from beacon.config import Settings
 from beacon.core.models import ScanMode
+from beacon.core.ports import PortSet
 from beacon.core.report import ScanReport
 from beacon.storage import Database, Repository
-from conftest import T0, make_device
+from conftest import T0, TOP, make_device
 
 
 runner = CliRunner()
@@ -38,9 +39,9 @@ def repo():
   db.close()
 
 
-def save(repo, *devices, at=T0, ports_scanned=False):
+def save(repo, *devices, at=T0, port_spec=()):
   repo.save_scan(
-    ScanReport("192.168.1.0/24", ScanMode.UNPRIVILEGED, at, finished_at=at, devices=list(devices), ports_scanned=ports_scanned)
+    ScanReport("192.168.1.0/24", ScanMode.UNPRIVILEGED, at, finished_at=at, devices=list(devices), port_spec=PortSet(port_spec))
   )
 
 
@@ -136,7 +137,7 @@ def test_show_json_includes_risk_identity_and_fingerprint(phones):
 
 
 def test_list_adds_the_risk_column_on_request(repo):
-  save(repo, make_device("192.168.1.1", ROUTER, ports=(23,), vendor=None), ports_scanned=True)
+  save(repo, make_device("192.168.1.1", ROUTER, ports=(23,), vendor=None), port_spec=TOP)
   plain = json.loads(runner.invoke(app, ["devices", "list", "--json"]).output)
   assert "risk" not in plain[0] and "services" not in plain[0]
   risky = json.loads(runner.invoke(app, ["devices", "list", "--json", "--risk"]).output)

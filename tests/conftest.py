@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import pytest
 
 from beacon.core.models import Device, DeviceStatus, PortInfo, PortState
+from beacon.core.ports import PortSet
 from beacon.core.vendors import VendorDatabase
 from beacon.storage import Database, Repository
 
@@ -18,6 +19,8 @@ MANUF_SAMPLE = """\
 B0:A7:B9\tTp-Link\tTP-Link Systems Inc
 """
 T0 = datetime(2026, 10, 24, 10, 0, tzinfo=UTC)
+# the port set most tests pretend was examined
+TOP = PortSet(range(1, 1025))
 
 
 @pytest.fixture

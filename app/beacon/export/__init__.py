@@ -9,7 +9,7 @@ from typing import Any
 
 from beacon.core.events import Event
 from beacon.core.models import Device
-from beacon.export.csv_export import render_csv
+from beacon.export.csv_export import REPORT_FIELDS, render_csv
 from beacon.export.html_export import render_html
 from beacon.export.json_export import render_json
 
@@ -58,4 +58,4 @@ def export_to_file(
   return path
 
 
-__all__ = ["FORMATS", "detect_format", "export_to_file", "render"]
+__all__ = ["FORMATS", "REPORT_FIELDS", "detect_format", "export_to_file", "render"]

@@ -7,8 +7,22 @@ from typing import Any
 
 
  # helpers ->
+# the first network an inventory knew keeps the historical, unscoped device keys
+DEFAULT_NETWORK_ID = 1
+
+
 def utcnow() -> datetime:
   return datetime.now(UTC).replace(microsecond=0)
+
+
+def _iso(value: datetime | None) -> str | None:
+  return value.isoformat() if value else None
+
+
+def scoped_key(network_id: int, base: str) -> str:
+  """device key inside a network. two networks may reuse the same private range (and a locally
+  administered mac), so every network but the first prefixes its keys with `n<id>:`."""
+  return base if network_id == DEFAULT_NETWORK_ID else f"n{network_id}:{base}"
 
 
  # enums ->
@@ -32,9 +46,12 @@ class DeviceStatus(StrEnum):
 
 
 class PortState(StrEnum):
+  """what one probe learned about a port. "not examined" is not a state: it is a port outside the scan's port set."""
+
   OPEN = "open"
-  CLOSED = "closed"
-  FILTERED = "filtered"
+  CLOSED = "closed"  # the host refused the connection: a confirmed close
+  FILTERED = "filtered"  # no answer before the timeout: unknown, never a confirmed close
+  ERROR = "error"  # the probe itself failed (no route, no buffer): says nothing about the port
 
 
  # raw scanner output ->
@@ -105,12 +122,23 @@ class Latency:
 
 @dataclass(slots=True)
 class PortInfo:
+  """a port of a device: its current state plus when and how it was last measured.
+
+  `service` is inferred from the port number; `protocol_observed` is what the banner proved.
+  """
+
   port: int
   state: PortState
   protocol: str = "tcp"
   service: str | None = None
   banner: str | None = None
   rtt_ms: float | None = None
+  protocol_observed: str | None = None
+  last_probe: PortState | None = None
+  checked_at: datetime | None = None
+  open_seen_at: datetime | None = None
+  first_seen: datetime | None = None
+  tls: dict[str, Any] | None = None
 
   def to_dict(self) -> dict[str, Any]:
     return {
@@ -118,7 +146,13 @@ class PortInfo:
       "protocol": self.protocol,
       "state": str(self.state),
       "service": self.service,
+      "protocol_observed": self.protocol_observed,
       "banner": self.banner,
+      "last_probe": str(self.last_probe) if self.last_probe else None,
+      "checked_at": _iso(self.checked_at),
+      "open_seen_at": _iso(self.open_seen_at),
+      "first_seen": _iso(self.first_seen),
+      "tls": self.tls,
     }
 
 
@@ -148,10 +182,18 @@ class Device:
   last_seen: datetime | None = None
   services: list[str] = field(default_factory=list)
   identity_id: int | None = None
+  network_id: int = DEFAULT_NETWORK_ID
+  ips6: list[str] = field(default_factory=list)
+  category: str | None = None
+  tags: list[str] = field(default_factory=list)
+  notes: str | None = None
+  owner: str | None = None
+  essential: bool = False
+  version: int = 0
 
   @property
   def key(self) -> str:
-    return self.mac or f"ip:{self.ip}"
+    return scoped_key(self.network_id, self.mac or f"ip:{self.ip}")
 
   @property
   def open_ports(self) -> list[PortInfo]:
@@ -193,6 +235,12 @@ class Device:
       "open_ports": [p.to_dict() for p in self.open_ports],
       "sources": sorted(self.sources),
       "identity_id": self.identity_id,
+      "network_id": self.network_id,
+      "ips6": self.ips6,
+      "category": self.category,
+      "tags": self.tags,
+      "owner": self.owner,
+      "essential": self.essential,
     }
     if fingerprint:
       data["services"] = list(self.services)

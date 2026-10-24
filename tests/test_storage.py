@@ -5,18 +5,19 @@ from datetime import timedelta
 import pytest
 
 from beacon.core.events import Event, EventType, Severity
-from beacon.core.models import DeviceStatus, Latency, ScanMode
+from beacon.core.models import DeviceStatus, Latency, PortInfo, PortState, ScanMode
+from beacon.core.ports import PortSet
 from beacon.core.report import ScanReport
 from beacon.storage import Database, Repository
 from beacon.storage.database import SCHEMA_VERSION
-from conftest import T0, make_device
+from conftest import T0, TOP, make_device
 
 
 ROUTER = "34:5d:9e:3f:2a:77"
 PHONE = "8e:e7:35:fe:0c:c6"
 
 
-def report(devices, events=(), ports_scanned=False, at=T0):
+def report(devices, events=(), port_spec=(), at=T0):
   return ScanReport(
     network="192.168.1.0/24",
     mode=ScanMode.UNPRIVILEGED,
@@ -25,7 +26,7 @@ def report(devices, events=(), ports_scanned=False, at=T0):
     interface="wlan0",
     devices=list(devices),
     events=list(events),
-    ports_scanned=ports_scanned,
+    port_spec=PortSet(port_spec),
   )
 
 
@@ -45,7 +46,7 @@ def test_schema_is_migrated(tmp_path):
 def test_save_and_load_roundtrip(repo):
   router = make_device("192.168.1.1", ROUTER, ports=(80, 443), vendor="Sagemcom", ttl=64, os_guess="linux/unix/macos")
   router.latency = Latency(method="icmp", sent=3, samples=[1.0, 2.0, 3.0])
-  scan_id = repo.save_scan(report([router], ports_scanned=True))
+  scan_id = repo.save_scan(report([router], port_spec=TOP))
   assert scan_id == 1
 
   loaded = repo.load_devices()[ROUTER]
@@ -55,12 +56,25 @@ def test_save_and_load_roundtrip(repo):
   assert loaded.first_seen == T0
 
 
-def test_ports_are_synced_only_when_scanned(repo):
-  repo.save_scan(report([make_device("192.168.1.1", ROUTER, ports=(80, 443))], ports_scanned=True))
-  repo.save_scan(report([make_device("192.168.1.1", ROUTER)], ports_scanned=False))
+def test_ports_are_never_deleted_and_keep_their_state(repo):
+  repo.save_scan(report([make_device("192.168.1.1", ROUTER, ports=(80, 443))], port_spec=TOP))
+  repo.save_scan(report([make_device("192.168.1.1", ROUTER)]))
   assert [p.port for p in repo.load_devices()[ROUTER].open_ports] == [80, 443]
-  repo.save_scan(report([make_device("192.168.1.1", ROUTER, ports=(22,))], ports_scanned=True))
-  assert [p.port for p in repo.load_devices()[ROUTER].open_ports] == [22]
+  later = make_device("192.168.1.1", ROUTER, ports=(22,))
+  later.ports.append(PortInfo(443, PortState.CLOSED, last_probe=PortState.CLOSED, checked_at=T0))
+  repo.save_scan(report([later], port_spec=TOP))
+  device = repo.load_devices()[ROUTER]
+  assert [p.port for p in device.open_ports] == [22, 80]
+  assert {p.port: str(p.state) for p in device.ports} == {22: "open", 80: "open", 443: "closed"}
+
+
+def test_port_coverage_is_recorded_per_device_and_scan(repo):
+  repo.save_scan(report([make_device("192.168.1.1", ROUTER)], port_spec=PortSet([22, 80])))
+  repo.save_scan(report([make_device("192.168.1.1", ROUTER)], port_spec=PortSet([443]), at=T0 + timedelta(hours=1)))
+  repo.save_scan(report([make_device("192.168.1.1", ROUTER)], at=T0 + timedelta(hours=2)))
+  spec, checked = repo.port_coverage()[ROUTER]
+  assert spec == PortSet([22, 80, 443]) and checked == T0 + timedelta(hours=1)
+  assert [c["spec"] for c in repo.coverage_history(ROUTER)] == ["443", "22,80"]
 
 
 def test_upsert_keeps_alias_trust_and_known_hostname(repo):
@@ -204,7 +218,7 @@ def test_trust_all_reviews_everything(repo):
 def test_ports_ever_scanned(repo):
   repo.save_scan(report([make_device("192.168.1.1", ROUTER)]))
   assert not repo.ports_ever_scanned()
-  repo.save_scan(report([make_device("192.168.1.1", ROUTER)], ports_scanned=True))
+  repo.save_scan(report([make_device("192.168.1.1", ROUTER)], port_spec=TOP))
   assert repo.ports_ever_scanned()
 
 
@@ -387,3 +401,36 @@ def test_a_failure_while_recording_sessions_rolls_the_whole_scan_back(repo, monk
   with pytest.raises(sqlite3.OperationalError):
     repo.save_scan(report([make_device("192.168.1.1", ROUTER)]))
   assert repo.list_scans() == [] and repo.load_devices() == {}
+
+
+def test_recent_port_openings_keep_the_newest_per_port_and_skip_first_checks(repo):
+  def opened(port, at, first_check=False):
+    return Event(EventType.PORT_OPENED, Severity.WARNING, "x", device_key=ROUTER, details={"port": port, "first_check": first_check}, timestamp=at)
+
+  repo.save_scan(report([make_device("192.168.1.1", ROUTER)], [opened(22, T0), opened(22, T0 + timedelta(hours=1)), opened(8443, T0, first_check=True)]))
+  [event] = repo.recent_port_openings(T0 - timedelta(days=1))
+  assert event.details["port"] == 22 and event.timestamp == T0 + timedelta(hours=1) and event.acked_at is None
+  repo.ack_events(ROUTER)
+  assert repo.recent_port_openings(T0 - timedelta(days=1))[0].acked_at is not None
+  assert repo.recent_port_openings(T0 + timedelta(hours=2)) == []
+  assert repo.recent_port_openings(T0 - timedelta(days=1), device_keys=["someone"]) == []
+
+
+def test_pending_events_are_grouped_per_device(repo):
+  events = [Event(EventType.NEW_DEVICE, Severity.WARNING, f"e{i}", device_key=ROUTER, timestamp=T0 + timedelta(minutes=i)) for i in range(7)]
+  repo.save_scan(report([make_device("192.168.1.1", ROUTER)], events))
+  assert repo.pending_by_device() == {ROUTER: (7, T0 + timedelta(minutes=6))}
+  latest = repo.latest_pending([ROUTER], per_device=3)[ROUTER]
+  assert [e.message for e in latest] == ["e6", "e5", "e4"]
+
+
+def test_recent_opening_preserves_the_latest_events_review_state(repo):
+  events = [Event(EventType.PORT_OPENED, Severity.WARNING, str(i), device_key=ROUTER,
+                  details={"port": 22}, timestamp=T0 + timedelta(hours=i)) for i in (2, 0, 1)]
+  repo.save_scan(report([make_device("192.168.1.1", ROUTER)], events))
+  latest = max(repo.list_events(), key=lambda e: e.timestamp)
+  repo.ack_event(latest.id)
+  [found] = repo.recent_port_openings(T0)
+  assert found.id == latest.id and found.timestamp == latest.timestamp
+  assert found.acked_at is not None
+  assert repo.port_change_counts(T0) == {(EventType.PORT_OPENED, 22): 3}

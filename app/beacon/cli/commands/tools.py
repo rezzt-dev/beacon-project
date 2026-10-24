@@ -113,3 +113,39 @@ def interfaces(json_out: JsonOut = False) -> None:
     )
     return
   console.print(interfaces_table(found, default))
+
+
+ # listen ->
+def listen(
+  interface: Annotated[str | None, typer.Option("--iface", "-i", help="interface to listen on.", show_default=False)] = None,
+  seconds: Annotated[int, typer.Option("--seconds", "-n", min=1, max=86400, help="how long to listen.")] = 60,
+  json_out: JsonOut = False,
+) -> None:
+  """listen passively for arp, dhcp and mdns (needs root/administrator and scapy). nothing is sent."""
+  import time
+
+  from beacon.scanners.passive import PassiveListener
+  from beacon.scanners.privileges import privileged_mode_available
+
+  if not privileged_mode_available():
+    err_console.print("[alert]✗ error:[/alert] passive listening needs root/administrator (npcap on windows) and scapy")
+    raise typer.Exit(1)
+  listener = PassiveListener(interface)
+  listener.start()
+  seen = 0
+  try:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+      time.sleep(0.5)
+      for sighting in listener.drain():
+        seen += 1
+        if json_out:
+          typer.echo(json.dumps(sighting.to_dict()))
+        else:
+          extra = " · ".join(x for x in (sighting.hostname, sighting.vendor_class, sighting.dhcp_fingerprint and f"dhcp {sighting.dhcp_fingerprint}") if x)
+          console.print(f"[muted]{sighting.source:5}[/muted] [mac]{sighting.mac}[/mac] [ip]{sighting.ip or '—'}[/ip] {extra}")
+  except KeyboardInterrupt:
+    pass
+  finally:
+    listener.stop()
+  err_console.print(f"[muted]{seen} sightings · {listener.dropped} dropped[/muted]")

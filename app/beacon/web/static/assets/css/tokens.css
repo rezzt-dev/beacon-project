@@ -1,0 +1,136 @@
+/* design tokens: the same sober palette as the html report. every state also has a symbol or a
+   word in the markup, so nothing depends on color alone. themes: system (default), light, dark. */
+
+:root {
+  color-scheme: light;
+  --bg: oklch(0.982 0.004 250);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.962 0.007 250);
+  --hover: oklch(0.948 0.01 250);
+  --line: oklch(0.9 0.009 250);
+  --line-strong: oklch(0.8 0.012 250);
+  --ink: oklch(0.23 0.016 250);
+  --ink-2: oklch(0.42 0.016 250);
+  --ink-3: oklch(0.52 0.012 250);
+  --accent: oklch(0.5 0.15 248);
+  --accent-ink: oklch(0.44 0.15 248);
+  --accent-tint: oklch(0.95 0.025 248);
+  --ok: oklch(0.55 0.13 155);
+  --ok-ink: oklch(0.42 0.11 155);
+  --ok-tint: oklch(0.955 0.03 155);
+  --warn: oklch(0.7 0.15 70);
+  --warn-ink: oklch(0.46 0.11 65);
+  --warn-tint: oklch(0.96 0.04 80);
+  --alert: oklch(0.55 0.2 27);
+  --alert-ink: oklch(0.46 0.18 27);
+  --alert-tint: oklch(0.955 0.025 27);
+  --chip: oklch(0.94 0.008 250);
+  --focus: oklch(0.5 0.17 248);
+  /* sequential ramp (one hue, light to dark) for presence frequency */
+  --heat-0: #cde2fb;
+  --heat-1: #86b6ef;
+  --heat-2: #3987e5;
+  --heat-3: #256abf;
+  --heat-4: #104281;
+  --series: #2a78d6;
+  --hatch: oklch(0.72 0.01 250);
+
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --radius: 8px;
+  --radius-sm: 5px;
+  --row-pad: 8px;
+  --sidebar: 228px;
+  --topbar: 56px;
+  --z-top: 20;
+  --z-overlay: 40;
+  --z-toast: 50;
+}
+
+:root[data-density="compact"] {
+  --row-pad: 4px;
+  --text-md: 0.8125rem;
+}
+
+/* dark: chosen explicitly, or following the system unless light was chosen */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: oklch(0.17 0.01 250);
+    --surface: oklch(0.205 0.012 250);
+    --surface-2: oklch(0.235 0.013 250);
+    --hover: oklch(0.26 0.014 250);
+    --line: oklch(0.3 0.014 250);
+    --line-strong: oklch(0.4 0.016 250);
+    --ink: oklch(0.94 0.006 250);
+    --ink-2: oklch(0.77 0.012 250);
+    --ink-3: oklch(0.68 0.012 250);
+    --accent: oklch(0.72 0.13 248);
+    --accent-ink: oklch(0.8 0.1 248);
+    --accent-tint: oklch(0.29 0.05 248);
+    --ok: oklch(0.74 0.15 155);
+    --ok-ink: oklch(0.82 0.13 155);
+    --ok-tint: oklch(0.27 0.04 155);
+    --warn: oklch(0.8 0.14 80);
+    --warn-ink: oklch(0.86 0.12 80);
+    --warn-tint: oklch(0.29 0.045 75);
+    --alert: oklch(0.68 0.18 25);
+    --alert-ink: oklch(0.82 0.12 25);
+    --alert-tint: oklch(0.27 0.05 25);
+    --chip: oklch(0.28 0.013 250);
+    --focus: oklch(0.78 0.13 248);
+    --heat-0: #104281;
+    --heat-1: #1c5cab;
+    --heat-2: #3987e5;
+    --heat-3: #6da7ec;
+    --heat-4: #b7d3f6;
+    --series: #3987e5;
+    --hatch: oklch(0.42 0.012 250);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: oklch(0.17 0.01 250);
+  --surface: oklch(0.205 0.012 250);
+  --surface-2: oklch(0.235 0.013 250);
+  --hover: oklch(0.26 0.014 250);
+  --line: oklch(0.3 0.014 250);
+  --line-strong: oklch(0.4 0.016 250);
+  --ink: oklch(0.94 0.006 250);
+  --ink-2: oklch(0.77 0.012 250);
+  --ink-3: oklch(0.68 0.012 250);
+  --accent: oklch(0.72 0.13 248);
+  --accent-ink: oklch(0.8 0.1 248);
+  --accent-tint: oklch(0.29 0.05 248);
+  --ok: oklch(0.74 0.15 155);
+  --ok-ink: oklch(0.82 0.13 155);
+  --ok-tint: oklch(0.27 0.04 155);
+  --warn: oklch(0.8 0.14 80);
+  --warn-ink: oklch(0.86 0.12 80);
+  --warn-tint: oklch(0.29 0.045 75);
+  --alert: oklch(0.68 0.18 25);
+  --alert-ink: oklch(0.82 0.12 25);
+  --alert-tint: oklch(0.27 0.05 25);
+  --chip: oklch(0.28 0.013 250);
+  --focus: oklch(0.78 0.13 248);
+  --heat-0: #104281;
+  --heat-1: #1c5cab;
+  --heat-2: #3987e5;
+  --heat-3: #6da7ec;
+  --heat-4: #b7d3f6;
+  --series: #3987e5;
+  --hatch: oklch(0.42 0.012 250);
+}

@@ -108,7 +108,11 @@ def risk_text(assessment: RiskAssessment | None) -> Text:
   """`● high 65`: the level is spelled out so it reads without color."""
   if assessment is None:
     return Text("—", style="muted")
-  return Text(f"● {assessment.level} {assessment.score}", style=RISK_STYLE[assessment.level])
+  text = Text(f"● {assessment.level} {assessment.score}", style=RISK_STYLE[assessment.level])
+  if not assessment.complete:
+    # a low score without port data is unknown exposure, not a clean bill of health
+    text.append(" ?", style="muted")
+  return text
 
 
 def status_marker(device: Device) -> Text:
@@ -232,6 +236,7 @@ def device_info(device: Device, risk: RiskAssessment | None = None) -> Table:
   info.add_column()
   rows: list[tuple[str, RenderableType]] = [
     ("key", device.key),
+    ("network", str(device.network_id)),
     ("ip", ", ".join(device.ips) if len(device.ips) > 1 else device.ip),
     ("mac", device.mac or "—"),
     ("alias", Text(device.alias or "—")),
@@ -244,6 +249,10 @@ def device_info(device: Device, risk: RiskAssessment | None = None) -> Table:
     ("first seen", fmt_time(device.first_seen)),
     ("last seen", fmt_time(device.last_seen)),
   ]
+  if device.ips6:
+    rows.insert(3, ("ipv6", ", ".join(device.ips6)))
+  if device.tags or device.category or device.owner:
+    rows.append(("labels", Text(" · ".join(x for x in (device.category, device.owner, *device.tags) if x))))
   if device.services:
     rows.insert(5, ("services", Text(", ".join(device.services))))
   if risk is not None:
@@ -257,9 +266,34 @@ def risk_reasons(assessment: RiskAssessment) -> Text:
   text = risk_text(assessment)
   if assessment.reasons:
     text.append("  " + " · ".join(r.text for r in assessment.reasons), style="muted")
-  if not assessment.ports_known:
-    text.append("  (ports not scanned)", style="muted")
+  for note in assessment.notes:
+    text.append(f"\n{note}", style="muted")
   return text
+
+
+PORT_STATE_STYLE = {"open": "bold", "closed": "muted", "filtered": "warning", "error": "alert"}
+
+
+def ports_table(device: Device) -> Table | None:
+  """every known port with its state, how it was identified and when it was last checked."""
+  if not device.ports:
+    return None
+  table = Table(box=box.SIMPLE, header_style="bold", title="ports", title_justify="left", pad_edge=False)
+  table.add_column("port", justify="right", no_wrap=True)
+  table.add_column("state", no_wrap=True)
+  table.add_column("service")
+  table.add_column("last checked", no_wrap=True, style="muted")
+  table.add_column("banner / certificate", overflow="fold", style="muted")
+  for port in sorted(device.ports, key=lambda p: (p.state != "open", p.port)):
+    state = Text(str(port.state), style=PORT_STATE_STYLE.get(str(port.state), ""))
+    if port.last_probe and port.last_probe != port.state:
+      state.append(f" (last probe {port.last_probe})", style="muted")
+    service = port.protocol_observed and f"{port.protocol_observed} (seen)" or (f"{port.service} (by number)" if port.service else "—")
+    extra = port.banner or ""
+    if port.tls and port.tls.get("subject"):
+      extra = f"tls {port.tls['subject']}, expires {str(port.tls.get('not_after') or '?')[:10]}" + (f" · {extra}" if extra else "")
+    table.add_row(f"{port.port}/{port.protocol}", state, service, fmt_time(port.checked_at, short=True), extra or "—")
+  return table
 
 
 def identity_block(device: Device, members: Sequence[Device]) -> RenderableType:
@@ -298,13 +332,7 @@ def device_detail(
   ]
   if members:
     parts.append(identity_block(device, members))
-  if device.open_ports:
-    ports = Table(box=box.SIMPLE, header_style="bold", title="open ports", title_justify="left")
-    ports.add_column("port", justify="right")
-    ports.add_column("service")
-    ports.add_column("banner", overflow="fold")
-    for p in device.open_ports:
-      ports.add_row(f"{p.port}/{p.protocol}", p.service or "—", p.banner or "—")
+  if (ports := ports_table(device)) is not None:
     parts.append(ports)
   if presence is not None:
     parts.append(presence)
@@ -434,6 +462,8 @@ def report_summary(report: ScanReport) -> Text:
   if report.interface:
     text.append(f" via {report.interface}")
   text.append(f" · {report.mode} mode · {fmt_duration(report.duration)}", style="muted")
+  if str(report.status) != "complete":
+    text.append(f" · {report.status} ({plural(len(report.issues), 'issue')})", style="warning")
   if untrusted:
     text.append(f" · {untrusted} untrusted", style="alert")
   if report.alerts:

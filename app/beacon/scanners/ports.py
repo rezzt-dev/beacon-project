@@ -1,12 +1,17 @@
  # import libraries ->
 import asyncio
 import contextlib
+import errno
 import socket
 import time
-from collections.abc import Iterable, Sequence
+from collections import Counter
+from collections.abc import Collection, Iterable, Sequence
+from dataclasses import dataclass, field
 
 from beacon.core.engine import clean_banner
+from beacon.core.exposure import observed_protocol
 from beacon.core.models import PortInfo, PortState
+from beacon.core.ports import PortSet
 
 
  # constants ->
@@ -123,7 +128,10 @@ def _summarize_http(data: bytes) -> str:
   return f"{status} | server: {server}" if server else status
 
 
-async def grab_banner(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, ip: str, port: int, timeout: float) -> str | None:
+async def read_banner(
+  reader: asyncio.StreamReader, writer: asyncio.StreamWriter, ip: str, port: int, timeout: float
+) -> tuple[str | None, str | None]:
+  """`(banner, observed protocol)` from the first bytes a service sends (or answers to a http get)."""
   data = b""
   with contextlib.suppress(TimeoutError, OSError):
     data = await asyncio.wait_for(reader.read(512), timeout)
@@ -132,26 +140,93 @@ async def grab_banner(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
       writer.write(f"GET / HTTP/1.0\r\nHost: {ip}\r\nUser-Agent: beacon\r\n\r\n".encode())
       await writer.drain()
       data = await asyncio.wait_for(reader.read(1024), timeout)
+  protocol = observed_protocol(data)
   if data.startswith(b"HTTP/"):
-    return clean_banner(_summarize_http(data))
-  return clean_banner(data)
+    return clean_banner(_summarize_http(data)), protocol
+  if protocol in ("telnet", "tls"):
+    return None, protocol  # negotiation bytes, not text
+  return clean_banner(data), protocol
+
+
+async def grab_banner(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, ip: str, port: int, timeout: float) -> str | None:
+  return (await read_banner(reader, writer, ip, port, timeout))[0]
 
 
  # port scanning ->
+# errors that come from the path or the local stack, not from the port: they prove nothing about it
+_LOCAL_ERRNOS = {errno.EHOSTUNREACH, errno.ENETUNREACH, errno.ENOBUFS, errno.EMFILE, errno.ENFILE, errno.EADDRNOTAVAIL}
+
+
 async def probe_port(ip: str, port: int, timeout: float, banner_timeout: float | None = None) -> PortInfo:
+  """one tcp connect: open, closed (refused), filtered (silence) or error (the probe itself failed)."""
   started = time.perf_counter()
   try:
     reader, writer = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout)
   except ConnectionRefusedError:
     return PortInfo(port=port, state=PortState.CLOSED)
-  except (TimeoutError, OSError):
+  except TimeoutError:
     return PortInfo(port=port, state=PortState.FILTERED)
+  except OSError as exc:
+    state = PortState.ERROR if exc.errno in _LOCAL_ERRNOS else PortState.FILTERED
+    return PortInfo(port=port, state=state)
   rtt = (time.perf_counter() - started) * 1000
+  banner = protocol = None
   try:
-    banner = await grab_banner(reader, writer, ip, port, banner_timeout) if banner_timeout else None
+    if banner_timeout:
+      banner, protocol = await read_banner(reader, writer, ip, port, banner_timeout)
   finally:
     await _close(writer)
-  return PortInfo(port=port, state=PortState.OPEN, service=service_name(port), banner=banner, rtt_ms=rtt)
+  return PortInfo(
+    port=port, state=PortState.OPEN, service=service_name(port), banner=banner, rtt_ms=rtt, protocol_observed=protocol
+  )
+
+
+@dataclass(slots=True)
+class PortScanResult:
+  """what one host scan measured: every open port, every tracked port whatever its state, and totals."""
+
+  examined: PortSet
+  ports: list[PortInfo] = field(default_factory=list)
+  counts: Counter[str] = field(default_factory=Counter)
+
+  @property
+  def open(self) -> list[PortInfo]:
+    return [p for p in self.ports if p.state == PortState.OPEN]
+
+
+async def scan_host_ports(
+  ip: str,
+  ports: Iterable[int],
+  timeout: float = 1.0,
+  semaphore: asyncio.Semaphore | None = None,
+  banner_timeout: float | None = 1.5,
+  workers: int = 256,
+  track: Collection[int] = (),
+) -> PortScanResult:
+  """concurrent tcp connect scan of one host.
+
+  open ports are always reported; closed, filtered and failed probes only for ports in `track`
+  (the ports already known for this host), so a scan of 65535 ports keeps memory flat while a
+  known port that closed is still noticed. a fixed pool of workers pulls ports from a shared
+  iterator and the optional semaphore caps sockets across every host scanned at the same time.
+  """
+  port_list = list(ports)
+  result = PortScanResult(examined=PortSet(port_list))
+  queue = iter(port_list)
+  tracked = set(track)
+  limiter = semaphore or asyncio.Semaphore(workers)
+
+  async def worker() -> None:
+    for port in queue:
+      async with limiter:
+        probe = await probe_port(ip, port, timeout, banner_timeout)
+      result.counts[str(probe.state)] += 1
+      if probe.state == PortState.OPEN or port in tracked:
+        result.ports.append(probe)
+
+  await asyncio.gather(*(worker() for _ in range(max(1, min(workers, len(port_list))))))
+  result.ports.sort(key=lambda p: p.port)
+  return result
 
 
 async def scan_ports(
@@ -162,22 +237,5 @@ async def scan_ports(
   banner_timeout: float | None = 1.5,
   workers: int = 256,
 ) -> list[PortInfo]:
-  """concurrent tcp connect scan of one host; returns only open ports.
-
-  a fixed pool of workers pulls ports from a shared iterator, so memory stays
-  flat even for `all` (65535 ports). the optional semaphore caps sockets
-  across every host scanned at the same time.
-  """
-  queue = iter(ports)
-  found: list[PortInfo] = []
-  limiter = semaphore or asyncio.Semaphore(workers)
-
-  async def worker() -> None:
-    for port in queue:
-      async with limiter:
-        result = await probe_port(ip, port, timeout, banner_timeout)
-      if result.state == PortState.OPEN:
-        found.append(result)
-
-  await asyncio.gather(*(worker() for _ in range(workers)))
-  return sorted(found, key=lambda p: p.port)
+  """concurrent tcp connect scan of one host; returns only open ports."""
+  return (await scan_host_ports(ip, ports, timeout, semaphore, banner_timeout, workers)).open

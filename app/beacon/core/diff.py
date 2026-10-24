@@ -1,12 +1,13 @@
  # import libraries ->
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from datetime import datetime, timedelta
 from ipaddress import IPv4Address, IPv4Network
 
 from beacon.core.engine import IpConflict
 from beacon.core.events import Event, EventType, Severity
 from beacon.core.identity import IdentityMatch
-from beacon.core.models import Device, DeviceStatus, utcnow
+from beacon.core.models import Device, DeviceStatus, PortState, utcnow
+from beacon.core.ports import PortSet
 from beacon.core.risk import RiskLevel, assess
 
 
@@ -35,10 +36,12 @@ def detect_changes(
   current: dict[str, Device],
   conflicts: Iterable[IpConflict] = (),
   network: IPv4Network | None = None,
-  ports_scanned: bool = False,
+  port_spec: PortSet | None = None,
   offline_grace: timedelta = timedelta(0),
   now: datetime | None = None,
   identity_candidates: Mapping[str, IdentityMatch] | None = None,
+  examined_before: Mapping[str, PortSet | None] | None = None,
+  unobserved: Collection[str] = (),
 ) -> list[Event]:
   """compare the stored state with a fresh scan and emit change events.
 
@@ -51,11 +54,21 @@ def detect_changes(
   they are warnings (to be reviewed) and only an obviously risky one is an alert. a randomized
   device that probably is a known one with a new private mac (`identity_candidates`, by new
   key) is reported as an identity candidate instead of an unknown intruder.
+
+  ports: `current` devices carry this scan's probe results (open ports plus every known port that
+  was probed again) and `port_spec` is what was examined. a port outside it says nothing; a known
+  open port is reported closed only after a refused connection, never after a timeout. an open port
+  on a port never examined before (`examined_before`, by key; `None` = a legacy scan whose port set
+  is unknown) is a first check, not a change.
+
+  `unobserved` addresses could not be probed at all (send failures), so their silence is not an absence.
   """
   events: list[Event] = []
   now = now or utcnow()
   baseline = not previous
   identity_candidates = identity_candidates or {}
+  port_spec = port_spec or PortSet()
+  examined_before = examined_before or {}
 
   for key, device in sorted(current.items(), key=lambda item: IPv4Address(item[1].ip)):
     old = previous.get(key)
@@ -78,7 +91,7 @@ def detect_changes(
       continue
     if old is None:
       kind = "randomized mac" if device.randomized_mac else device.display_vendor
-      risk = assess(device)
+      risk = assess(device, ports_known=bool(port_spec), now=now)
       alert = not baseline or risk.level == RiskLevel.HIGH
       headline = "unknown device joined the network" if not baseline else "device found in the first scan"
       events.append(
@@ -115,30 +128,15 @@ def detect_changes(
         )
       )
 
-    if ports_scanned:
-      before = {p.port for p in old.open_ports}
-      after = {p.port: p for p in device.open_ports}
-      for port in sorted(after.keys() - before):
-        service = after[port].service or "unknown"
-        events.append(
-          _event(
-            EventType.PORT_OPENED,
-            Severity.WARNING,
-            f"new open port {port}/tcp ({service}) on {_label(device)}",
-            device,
-            port=port,
-            service=after[port].service,
-          )
-        )
-      for port in sorted(before - after.keys()):
-        events.append(
-          _event(EventType.PORT_CLOSED, Severity.INFO, f"port {port}/tcp closed on {_label(device)}", device, port=port)
-        )
+    if port_spec:
+      events.extend(_port_events(old, device, port_spec, examined_before))
 
   for key, old in previous.items():
     if key in current or old.status != DeviceStatus.ONLINE:
       continue
     if network is not None and IPv4Address(old.ip) not in network:
+      continue
+    if old.ip in unobserved:
       continue
     if old.last_seen is not None and now - old.last_seen < offline_grace:
       continue
@@ -155,4 +153,44 @@ def detect_changes(
       )
     )
 
+  return events
+
+
+def _port_events(old: Device, device: Device, port_spec: PortSet, examined_before: Mapping[str, PortSet | None]) -> list[Event]:
+  events: list[Event] = []
+  known = {p.port: p for p in old.ports}
+  results = {p.port: p for p in device.ports if p.port in port_spec}
+  legacy = device.key in examined_before and examined_before[device.key] is None
+  history = examined_before.get(device.key) or PortSet()
+  for port, result in sorted(results.items()):
+    before = known.get(port)
+    if result.state == PortState.OPEN and (before is None or before.state != PortState.OPEN):
+      service = result.protocol_observed or result.service or "unknown"
+      first_check = before is None and not legacy and port not in history
+      if first_check:
+        message = f"open port {port}/{result.protocol} ({service}) found on {_label(device)}: first time this port was checked"
+      else:
+        message = f"new open port {port}/{result.protocol} ({service}) on {_label(device)}"
+      events.append(
+        _event(
+          EventType.PORT_OPENED,
+          Severity.INFO if first_check else Severity.WARNING,
+          message,
+          device,
+          port=port,
+          service=result.service,
+          protocol_observed=result.protocol_observed,
+          first_check=first_check,
+        )
+      )
+    elif result.state == PortState.CLOSED and before is not None and before.state == PortState.OPEN:
+      events.append(
+        _event(
+          EventType.PORT_CLOSED,
+          Severity.INFO,
+          f"port {port}/{result.protocol} closed on {_label(device)} (connection refused)",
+          device,
+          port=port,
+        )
+      )
   return events

@@ -1,7 +1,7 @@
 [project]
 name = "beacon"
-version = "0.1.0"
-description = "terminal tool that discovers devices on the local network, identifies vendors, scans ports, measures latency and alerts on unknown devices"
+version = "0.2.0"
+description = "local network discovery, inventory and monitoring with a CLI, live web app and standalone reports"
 readme = "readme.md"
 requires-python = ">=3.11"
 license = { file = "license.md" }
@@ -11,6 +11,9 @@ dependencies = [
   "rich>=13.7",
   "psutil>=5.9",
   "scapy>=2.5",
+  # beacon live: a small asgi app and server, pure python, no node or browser needed for the cli
+  "starlette>=1.0",
+  "uvicorn>=0.30",
 ]
 
 [project.scripts]
@@ -20,6 +23,11 @@ beacon = "beacon.cli.main:run"
 dev = [
   "pytest>=8.0",
   "ruff>=0.6",
+  "httpx>=0.27",
+]
+# browser tests (tests/test_browser.py); after installing, run `python -m playwright install chromium`
+browser = [
+  "playwright>=1.45",
 ]
 
 [build-system]
@@ -32,6 +40,7 @@ packages = ["app/beacon"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["app"]
+markers = ["browser: drives a real browser (needs playwright and its chromium)"]
 
 [tool.ruff]
 line-length = 100

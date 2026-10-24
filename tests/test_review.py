@@ -16,7 +16,7 @@ from beacon.core.risk import assess
 from beacon.storage import Database, Repository
 from beacon.ui.console import THEME
 from beacon.ui.render import review_table
-from conftest import T0, make_device
+from conftest import T0, TOP, make_device
 
 
 runner = CliRunner()
@@ -62,7 +62,7 @@ def seeded(repo):
   ]
   events = [new_device_event(d.key, Severity.ALERT if d.key == CAMERA else Severity.WARNING) for d in devices]
   repo.save_scan(
-    ScanReport("192.168.1.0/24", ScanMode.UNPRIVILEGED, T0, finished_at=T0, devices=devices, events=events, ports_scanned=True)
+    ScanReport("192.168.1.0/24", ScanMode.UNPRIVILEGED, T0, finished_at=T0, devices=devices, events=events, port_spec=TOP)
   )
   return repo
 
@@ -92,7 +92,7 @@ def test_the_review_table_explains_each_device_at_a_normal_width():
   console = Console(width=100, record=True, force_terminal=False, theme=THEME)
   console.print(review_table(rows))
   text = console.export_text()
-  assert "telnet exposed (23)" in text and "not trusted" in text
+  assert "telnet on 23" in text and "not trusted" in text
 
 
 def test_json_lists_pending_devices_with_risk_and_reasons(seeded):

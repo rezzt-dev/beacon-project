@@ -80,6 +80,8 @@ class IcmpPinger:
     self._seq = random.randrange(0x10000)
     self._waiters: dict[tuple[str, int], asyncio.Future[tuple[float, int | None]]] = {}
     self._loop: asyncio.AbstractEventLoop | None = None
+    # addresses whose request never left the host: their silence is not an answer
+    self.unsent: set[str] = set()
 
   @classmethod
   def open(cls, pool_size: int = SOCKET_POOL) -> "IcmpPinger | None":
@@ -178,7 +180,9 @@ class IcmpPinger:
     sock = self._sockets[seq % len(self._sockets)]
     try:
       if not await self._send(sock, build_echo_request(self._ident, seq), ip):
+        self.unsent.add(ip)
         return None
+      self.unsent.discard(ip)
       started = time.perf_counter()
       received_at, ttl = await asyncio.wait_for(waiter, timeout)
     except (TimeoutError, OSError):

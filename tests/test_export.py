@@ -77,7 +77,7 @@ def test_html_report_lists_untrusted_online_devices_first_with_their_risk():
   assert "<title>(1) beacon · 192.168.1.0/24</title>" in page
   attention = page.split('class="attention"')[1].split("</section>")[0]
   assert "192.168.1.9" in attention and "192.168.1.2" not in attention
-  assert "telnet exposed (23)" in attention and "beacon review" in attention
+  assert "telnet on 23" in attention and "beacon review" in attention
 
 
 def test_html_report_rows_carry_what_the_filters_need():

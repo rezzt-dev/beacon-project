@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# lanza `beacon watch` y abre en el navegador la web en vivo (se refresca sola).
-# uso: scripts/beacon-live.sh [opciones de beacon watch, p. ej. -n 30 --target 192.168.1.0/24]
+# abre beacon en el navegador. dos modos:
+#   scripts/beacon-live.sh [opciones de beacon live]            aplicación live: navegación, histórico y acciones
+#                                                                (p. ej. --monitor 60 --profile casa)
+#   scripts/beacon-live.sh --report [opciones de beacon watch]  informe html autónomo que `beacon watch -o` regenera
+#                                                                (p. ej. -n 30 --target 192.168.1.0/24)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -28,7 +31,13 @@ if [ -z "${UV_PROJECT_ENVIRONMENT:-}" ]; then
   fi
 fi
 
-# borra la web anterior para abrir el navegador solo cuando exista la nueva
+if [ "${1:-}" != "--report" ]; then
+  echo "beacon live: la aplicación se abrirá en el navegador. ctrl+c para parar."
+  exec "${BEACON[@]}" live "$@"
+fi
+shift
+
+# borra el informe anterior para abrir el navegador solo cuando exista el nuevo
 rm -f "$OUTPUT"
 
 open_browser() {
@@ -52,6 +61,6 @@ WAITER=$!
 trap 'kill "$WAITER" 2>/dev/null || true' EXIT
 
 case "$OUTPUT" in /*) URL="file://$OUTPUT" ;; *) URL="$OUTPUT" ;; esac
-echo "web en vivo: $URL"
+echo "informe html en vivo: $URL"
 echo "se abrirá en el navegador al terminar el primer escaneo. ctrl+c para parar."
 "${BEACON[@]}" watch -o "$OUTPUT" "$@"

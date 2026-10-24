@@ -6,8 +6,9 @@ from beacon.core.diff import detect_changes
 from beacon.core.engine import IpConflict
 from beacon.core.events import EventType, Severity
 from beacon.core.identity import IdentityMatch
-from beacon.core.models import DeviceStatus
-from conftest import T0, make_device
+from beacon.core.models import DeviceStatus, PortInfo, PortState
+from beacon.core.ports import PortSet
+from conftest import T0, TOP, make_device
 
 
 NET = IPv4Network("192.168.1.0/24")
@@ -107,14 +108,53 @@ def test_ip_change_is_reported():
   assert events[0].details == {"old_ip": "192.168.1.9", "new_ip": "192.168.1.42"}
 
 
+def results(device, **states):
+  """the probe results of a scan: `p22="closed"` and so on, on top of the device's open ports."""
+  for name, state in states.items():
+    device.ports.append(PortInfo(int(name[1:]), PortState(state)))
+  return device
+
+
 def test_port_changes_only_when_ports_were_scanned():
   previous = {ROUTER: make_device("192.168.1.1", ROUTER, ports=(80, 443))}
-  current = {ROUTER: make_device("192.168.1.1", ROUTER, ports=(80, 22))}
-  assert detect_changes(previous, current, network=NET, ports_scanned=False) == []
-  events = detect_changes(previous, current, network=NET, ports_scanned=True)
+  current = {ROUTER: results(make_device("192.168.1.1", ROUTER, ports=(80, 22)), p443="closed")}
+  assert detect_changes(previous, current, network=NET) == []
+  events = detect_changes(previous, current, network=NET, port_spec=TOP, examined_before={ROUTER: TOP})
   assert kinds(events) == [EventType.PORT_OPENED, EventType.PORT_CLOSED]
-  assert events[0].details["port"] == 22
-  assert events[1].details["port"] == 443
+  assert events[0].details["port"] == 22 and events[0].severity == Severity.WARNING
+  assert events[1].details["port"] == 443 and "refused" in events[1].message
+
+
+ # regression: a partial port scan never invents a close ->
+def test_ports_outside_the_examined_set_are_not_closed():
+  previous = {ROUTER: make_device("192.168.1.1", ROUTER, ports=(22, 80))}
+  current = {ROUTER: make_device("192.168.1.1", ROUTER, ports=(80,))}
+  assert detect_changes(previous, current, network=NET, port_spec=PortSet([80]), examined_before={ROUTER: TOP}) == []
+
+
+def test_a_timeout_on_a_known_open_port_is_not_a_close():
+  previous = {ROUTER: make_device("192.168.1.1", ROUTER, ports=(22,))}
+  current = {ROUTER: results(make_device("192.168.1.1", ROUTER), p22="filtered")}
+  assert detect_changes(previous, current, network=NET, port_spec=TOP, examined_before={ROUTER: TOP}) == []
+  errored = {ROUTER: results(make_device("192.168.1.1", ROUTER), p22="error")}
+  assert detect_changes(previous, errored, network=NET, port_spec=TOP, examined_before={ROUTER: TOP}) == []
+
+
+def test_a_port_checked_for_the_first_time_is_not_a_new_port():
+  previous = {ROUTER: make_device("192.168.1.1", ROUTER, ports=(80,))}
+  current = {ROUTER: make_device("192.168.1.1", ROUTER, ports=(80, 8443))}
+  events = detect_changes(previous, current, network=NET, port_spec=PortSet([80, 8443]), examined_before={ROUTER: PortSet([80])})
+  assert kinds(events) == [EventType.PORT_OPENED]
+  assert events[0].severity == Severity.INFO and events[0].details["first_check"] is True
+  legacy = detect_changes(previous, current, network=NET, port_spec=PortSet([80, 8443]), examined_before={ROUTER: None})
+  assert legacy[0].severity == Severity.WARNING and legacy[0].details["first_check"] is False
+
+
+ # regression: what could not be probed is not reported offline ->
+def test_unobserved_addresses_are_not_reported_offline():
+  previous = {LAPTOP: make_device("192.168.1.9", LAPTOP)}
+  assert detect_changes(previous, {}, network=NET, now=T0 + timedelta(hours=1), unobserved={"192.168.1.9"}) == []
+  assert kinds(detect_changes(previous, {}, network=NET, now=T0 + timedelta(hours=1))) == [EventType.DEVICE_OFFLINE]
 
 
 def test_ip_conflict_is_an_alert():

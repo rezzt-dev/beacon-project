@@ -1,6 +1,7 @@
  # import libraries ->
 import json
 import time
+from datetime import timedelta
 from typing import Annotated
 
 import typer
@@ -23,7 +24,7 @@ from beacon.cli.commands.options import (
   Target,
   Timeout,
 )
-from beacon.cli.context import get_app
+from beacon.cli.context import LeaseBusy, get_app, take_lease
 from beacon.core.events import EventBus, Severity
 from beacon.core.models import ScanMode
 from beacon.core.presence import SESSION_GAP
@@ -33,13 +34,29 @@ from beacon.export import export_to_file
 from beacon.pipeline import ScanError, ScanOptions
 from beacon.scanners.network import TargetError
 from beacon.scanners.ports import parse_port_spec
-from beacon.ui.console import console, err_console, success
+from beacon.services import profiles as profile_service
+from beacon.services.risk import assess_devices
+from beacon.ui.console import console, err_console, error, success
 from beacon.ui.live import WatchView
 from beacon.ui.render import devices_table, events_table, scan_summary
 
 
  # constants ->
 EXIT_ALERTS = 3
+EXIT_BUSY = 4
+SCAN_LEASE = timedelta(minutes=15)
+Profile = Annotated[
+  str | None,
+  typer.Option("--profile", help="use a saved profile (target, ports, exclusions, timing); other scan flags are ignored.", show_default=False),
+]
+
+
+def _from_profile(app, name: str, trigger: str):
+  found = app.repository.get_profile_by_name(name)
+  if found is None:
+    error(f"no profile named {name!r}", "list them with `beacon profiles list`")
+    raise typer.Exit(1)
+  return profile_service.scan_options(found, trigger)
 
 
 def _export_meta(report: ScanReport, **extra: object) -> dict[str, object]:
@@ -87,10 +104,11 @@ def scan(
   ] = None,
   no_identity: NoIdentity = False,
   no_presence: NoPresence = False,
+  profile: Profile = None,
 ) -> None:
   """run one discovery scan: find devices, fingerprint them and report changes."""
   app = get_app(ctx)
-  options = ScanOptions(
+  options = _from_profile(app, profile, "cli") if profile else ScanOptions(
     target=target,
     interface=interface,
     mode=mode,
@@ -105,7 +123,18 @@ def scan(
     presence=not no_presence,
     save=not no_save,
   )
-  report = app.run_scan(options, show_progress=not json_out)
+  if no_save:
+    options.save = False
+  try:
+    scope = take_lease(app.repository, options, "cli-scan", SCAN_LEASE)
+  except LeaseBusy as exc:
+    error(str(exc), "wait for it to finish, or stop the monitor in beacon live / the other watch")
+    raise typer.Exit(EXIT_BUSY) from exc
+  try:
+    report = app.run_scan(options, show_progress=not json_out)
+  finally:
+    if scope:
+      app.repository.release_lease(scope)
 
   if json_out:
     typer.echo(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
@@ -146,10 +175,11 @@ def watch(
     int | None,
     typer.Option("--offline-grace", min=0, help="seconds a device may be missing before it is reported offline [default: 2 x interval]."),
   ] = None,
+  profile: Profile = None,
 ) -> None:
   """monitor the network continuously with a live table and alerts on unknown devices."""
   app = get_app(ctx)
-  options = ScanOptions(
+  options = _from_profile(app, profile, "watch") if profile else ScanOptions(
     target=target,
     interface=interface,
     mode=mode,
@@ -163,7 +193,10 @@ def watch(
     # scans are `interval` apart: a stay is only broken when several of them are missed
     presence_gap=max(SESSION_GAP.total_seconds(), 3.0 * interval),
   )
+  options.trigger = "watch"
   view = WatchView(interval=interval, output=output)
+  lease_ttl = timedelta(seconds=3 * interval + 300)
+  scope: str | None = None
   bus = EventBus()
   bus.subscribe(view.on_event)
   if bell:
@@ -172,6 +205,13 @@ def watch(
   try:
     with Live(view, console=console, refresh_per_second=2, transient=False):
       while True:
+        try:
+          # renewed every cycle: if this process dies, the lease expires and others may scan again
+          scope = take_lease(app.repository, options, "cli-watch", lease_ttl) or scope
+        except LeaseBusy as exc:
+          view.fail(str(exc))
+          time.sleep(interval)
+          continue
         try:
           report = app.run_scan(options, bus=bus, progress=view)
         except (TargetError, ScanError, OSError) as exc:
@@ -183,8 +223,13 @@ def watch(
         view.update(report, inventory)
         if output is not None:
           recent = app.repository.list_events(limit=100)
-          meta = _export_meta(report, refresh=interval, ports_known=app.repository.ports_ever_scanned())
+          meta = _export_meta(
+            report, refresh=interval, ports_known=app.repository.ports_ever_scanned(), risks=assess_devices(app.repository, inventory)
+          )
           export_to_file(output, inventory, recent, meta)
         time.sleep(interval)
   except KeyboardInterrupt:
     console.print(view.summary())
+  finally:
+    if scope:
+      app.repository.release_lease(scope)
