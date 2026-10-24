@@ -5,6 +5,7 @@
 ### CASTELLANO
 
 #### NUEVO
+- añadir las capturas reales `.docs/assets/beacon-overview.png` y `.docs/assets/beacon-devices.png` con datos simulados para presentar el resumen y el inventario sin exponer una red personal
 - anadir la cli `beacon` con `typer` y `rich`: comandos `scan`, `watch`, `devices`, `events`, `export`, `status`, `ports`, `ping`, `interfaces` y `vendors`
 - anadir descubrimiento en modo privilegiado (barrido arp con `scapy`) y sin privilegios (barrido icmp, tabla arp del sistema y confirmacion tcp)
 - anadir pinger icmp asincrono propio con sockets `SOCK_DGRAM`/`SOCK_RAW`, pool de sockets y lectura de ttl
@@ -55,6 +56,9 @@
 - anadir la documentacion de la evolucion en `.docs/project-info/evolucion/` y el diagnostico y plan en `PROMPT-MEJORA-INTEGRAL.md`
 
 #### CAMBIOS
+- reorganizar `readme.md` en castellano e inglés con navegación interna, insignias, tarjetas html compatibles con markdown y secciones desplegables para facilitar la lectura
+- completar la guía de instalación con `uv` y `pip`, el inicio de `beacon live`, la demostración aislada y ejemplos de descubrimiento, revisión, perfiles, monitorización, exportación y automatización
+- documentar en `readme.md` las rutas de datos, la privacidad, el acceso, las copias y la restauración, la retención, los servicios, los problemas habituales, la validación y los límites de compatibilidad y licencia
 - redisenar la web en vivo (`export/html_export.py`): barra de estado con cuenta atras, pausa y aviso de datos obsoletos, recarga que conserva scroll, filtros y busqueda, bloque de dispositivos sin confianza con su riesgo, tabla con filtros, busqueda y orden, resaltado de lo nuevo desde que se abrio la pagina, eventos filtrables, diseno adaptable a movil y modo oscuro
 - proteger la web con una `Content-Security-Policy` basada en hashes y sin recursos externos; los datos viajan en atributos escapados, nunca como json en un `<script>`
 - redisenar la vista de `watch`: panel de estado con contadores y barra de etapa o cuenta atras, filas que caben en la terminal, marca `new`, eventos en tiempo relativo y resumen al parar
@@ -103,6 +107,10 @@
 - corregir la creacion de todas las tareas de un barrido icmp a la vez; ahora usa un pool acotado
 - corregir que confiar en un dispositivo borrara la evidencia de un puerto nuevo en el riesgo
 
+#### ELIMINADO
+
+- eliminar `PROMPT-MEJORA-INTEGRAL.md` de la raíz del repositorio
+
 #### SEGURIDAD
 - proteger la aplicacion local con escucha en loopback por defecto, lista de `Host`, comprobacion de origen, sesion firmada, csrf, limites de tamano y frecuencia y csp sin codigo en linea
 - limitar los escaneos de la web a rangos privados de hasta /16 en perfiles
@@ -112,6 +120,7 @@
 ### ENGLISH
 
 #### ADDED
+- add real screenshots at `.docs/assets/beacon-overview.png` and `.docs/assets/beacon-devices.png` using simulated data to present the overview and inventory without exposing a personal network
 - add the `beacon` cli built with `typer` and `rich`: `scan`, `watch`, `devices`, `events`, `export`, `status`, `ports`, `ping`, `interfaces` and `vendors` commands
 - add privileged discovery (arp sweep with `scapy`) and unprivileged discovery (icmp sweep, system arp table and tcp confirmation)
 - add a custom asynchronous icmp pinger with `SOCK_DGRAM`/`SOCK_RAW` sockets, a socket pool and ttl reading
@@ -162,6 +171,9 @@
 - add the evolution documentation in `.docs/project-info/evolucion/` and the diagnosis and plan in `PROMPT-MEJORA-INTEGRAL.md`
 
 #### CHANGED
+- reorganize `readme.md` in spanish and english with internal navigation, badges, markdown-compatible html cards and collapsible sections to improve readability
+- expand installation instructions with `uv` and `pip`, `beacon live` startup, an isolated demo and examples of discovery, review, profiles, monitoring, export and automation
+- document data paths, privacy, access, backup and restore, retention, services, troubleshooting, validation, compatibility limits and licensing in `readme.md`
 - redesign the live web (`export/html_export.py`): status bar with countdown, pause and a stale data warning, reloads that keep scroll, filters and search, a block of untrusted devices with their risk, a table with filters, search and sorting, highlighting of what is new since the page was opened, filterable events, a mobile layout and dark mode
 - protect the web with a hash based `Content-Security-Policy` and no external resources; data travels in escaped attributes, never as json inside a `<script>`
 - redesign the `watch` view: status panel with counters and a stage or countdown bar, rows that fit the terminal, a `new` mark, relative event times and a summary on exit
@@ -209,6 +221,10 @@
 - fix inventories of different networks with the same private range being merged
 - fix the icmp sweep creating every task at once; it now uses a bounded pool
 - fix trusting a device erasing the evidence of a new port from its risk
+
+#### REMOVED
+
+- remove `PROMPT-MEJORA-INTEGRAL.md` from the repository root
 
 #### SECURITY
 - protect the local app with a loopback listener by default, a `Host` allowlist, origin checks, a signed session, csrf, size and rate limits and a csp without inline code
