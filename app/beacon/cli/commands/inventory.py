@@ -59,7 +59,11 @@ def export(
   devices = repo.list_devices(status=DeviceStatus.ONLINE if online else None)
   recent = repo.list_events(limit=events_limit) if events_limit else []
   last = repo.stats()["last_scan"]
-  meta = {"network": last["network"] if last else None, "include_fingerprint": include_fingerprint}
+  meta = {
+    "network": last["network"] if last else None,
+    "include_fingerprint": include_fingerprint,
+    "ports_known": repo.ports_ever_scanned(),
+  }
   written = export_to_file(path, devices, recent, meta, fmt)
   success(f"exported {len(devices)} devices to {written}")
 

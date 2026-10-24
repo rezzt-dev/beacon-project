@@ -1,6 +1,6 @@
  # import libraries ->
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from datetime import datetime, timedelta
 
 from rich import box
@@ -9,7 +9,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from beacon.core.events import Event, Severity
+from beacon.core.events import Event, EventType, Severity
 from beacon.core.identity import IdentityMatch, fingerprint, score
 from beacon.core.models import Device, DeviceStatus, Latency
 from beacon.core.presence import (
@@ -54,15 +54,51 @@ def fmt_ports(device: Device, limit: int = 8) -> Text:
   return Text(shown + (f" +{len(ports) - limit}" if len(ports) > limit else ""))
 
 
-def fmt_name(device: Device) -> Text:
-  text = Text(device.alias or device.hostname or "—", style="bold" if device.alias else "")
+def fmt_name(device: Device, fresh: bool = False) -> Text:
+  """the alias and the tags; the hostname has a column of its own."""
+  text = Text(device.alias or "—", style="bold" if device.alias else "muted")
   if device.is_gateway:
     text.append(" gateway", style="accent")
   if device.is_local:
     text.append(" this host", style="accent")
   if device.identity_id is not None:
     text.append(" ⛓", style="accent")
+  if fresh:
+    text.append(" ")
+    text.append(" new ", style="new")
   return text
+
+
+def fmt_hostname(device: Device) -> Text:
+  return Text(device.hostname) if device.hostname else Text("—", style="muted")
+
+
+def fmt_ago(value: datetime | None, now: datetime | None = None) -> str:
+  """`just now`, `45s ago`, `12m ago`, `3h ago` or `2d ago`."""
+  if value is None:
+    return "—"
+  seconds = max(0, int(((now or datetime.now(value.tzinfo)) - value).total_seconds()))
+  if seconds < 10:
+    return "just now"
+  for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
+    if seconds >= size:
+      return f"{seconds // size}{unit} ago"
+  return f"{seconds}s ago"
+
+
+def plural(count: int, word: str) -> str:
+  """`1 alert`, `3 alerts`."""
+  return f"{count} {word}" + ("" if count == 1 else "s")
+
+
+def fmt_duration(seconds: float) -> str:
+  """`8.2s`, `4m 05s` or `2h 13m`."""
+  if seconds < 60:
+    return f"{seconds:.1f}s"
+  minutes, secs = divmod(int(seconds), 60)
+  if minutes < 60:
+    return f"{minutes}m {secs:02d}s"
+  return f"{minutes // 60}h {minutes % 60:02d}m"
 
 
 RISK_STYLE = {RiskLevel.LOW: "ok", RiskLevel.MEDIUM: "warning", RiskLevel.HIGH: "alert"}
@@ -82,18 +118,26 @@ def status_marker(device: Device) -> Text:
 
 
 SEVERITY_STYLE = {Severity.INFO: "info", Severity.WARNING: "warning", Severity.ALERT: "alert"}
+SEVERITY_MARK = {Severity.INFO: "·", Severity.WARNING: "!", Severity.ALERT: "✗"}
+
+
+def severity_text(severity: Severity) -> Text:
+  """`✗ alert`, `! warning` or `· info`: the symbol keeps it readable without color."""
+  return Text(f"{SEVERITY_MARK[severity]} {severity}", style=SEVERITY_STYLE[severity])
 
 
  # tables ->
-# optional columns are dropped, in this order, as the terminal gets narrower; ip, mac and name always stay
+# optional columns are dropped, in this order, as the terminal gets narrower; ip, mac, hostname and name always stay
 _COLUMN_DROP_ORDER: tuple[tuple[str, int], ...] = (
-  ("last seen", 150),
-  ("os", 135),
-  ("open ports", 120),
-  ("latency", 105),
-  ("vendor", 90),
-  ("risk", 70),  # only present when asked for, so it outlasts the rest
+  ("last seen", 175),
+  ("os", 155),
+  ("open ports", 140),
+  ("latency", 125),
+  ("vendor", 110),
+  ("risk", 80),  # only present when asked for, so it outlasts the rest
 )
+# long enough for most dhcp names (`galaxy-a31-de-ramona`) without folding them
+_HOSTNAME_WIDTH = 22
 
 
 def visible_columns(width: int, show_ports: bool = True, show_risk: bool = False) -> set[str]:
@@ -110,13 +154,19 @@ def devices_table(
   show_ports: bool = True,
   width: int | None = None,
   risks: Mapping[str, RiskAssessment] | None = None,
+  fresh: Collection[str] = (),
+  caption: str | None = None,
 ) -> Table:
-  shown = visible_columns(width or console.width, show_ports, show_risk=risks is not None)
+  width = width or console.width
+  shown = visible_columns(width, show_ports, show_risk=risks is not None)
   table = Table(title=title, box=box.SIMPLE_HEAVY, header_style="bold", title_justify="left", expand=False)
   table.add_column("", width=1, no_wrap=True)
   table.add_column("ip", style="ip", no_wrap=True, min_width=15)
   table.add_column("mac", style="mac", no_wrap=True, min_width=17)
-  table.add_column("name", overflow="fold")
+  longest = max((len(d.hostname) for d in devices if d.hostname), default=1)
+  # on a narrow terminal the hostname folds instead of squeezing the risk column out
+  table.add_column("hostname", style="host", overflow="fold", min_width=min(longest, _HOSTNAME_WIDTH if width >= 100 else 12))
+  table.add_column("name", overflow="fold", min_width=9)
   if "vendor" in shown:
     table.add_column("vendor", overflow="ellipsis", no_wrap=True, max_width=30)
   if "os" in shown:
@@ -131,7 +181,7 @@ def devices_table(
     table.add_column("last seen", style="muted", no_wrap=True)
 
   for d in devices:
-    row: list[RenderableType] = [status_marker(d), d.ip, d.mac or "—", fmt_name(d)]
+    row: list[RenderableType] = [status_marker(d), d.ip, d.mac or "—", fmt_hostname(d), fmt_name(d, fresh=d.key in fresh)]
     if "vendor" in shown:
       row.append(Text(d.display_vendor, style="" if d.vendor else "muted"))
     if "os" in shown:
@@ -145,20 +195,23 @@ def devices_table(
     if "last seen" in shown:
       row.append(fmt_time(d.last_seen))
     table.add_row(*row)
-  if not devices:
-    table.caption = "no devices"
+  table.caption = caption or (None if devices else "no devices")
+  table.caption_justify = "left"
+  table.caption_style = "muted"
   return table
 
 
-def events_table(events: Sequence[Event], title: str | None = "events") -> Table:
-  table = Table(title=title, box=box.SIMPLE, header_style="bold", title_justify="left")
-  table.add_column("time", style="muted", no_wrap=True)
+def events_table(events: Sequence[Event], title: str | None = "events", relative: bool = False) -> Table:
+  """events with the severity spelled out; `relative` shows `3m ago` instead of the date (watch)."""
+  table = Table(title=title, box=box.SIMPLE, header_style="bold", title_justify="left", title_style="bold")
+  table.add_column("when" if relative else "time", style="muted", no_wrap=True, justify="right" if relative else "left")
   table.add_column("severity", no_wrap=True)
-  table.add_column("type", no_wrap=True)
+  table.add_column("type", no_wrap=True, style="muted")
   table.add_column("message", overflow="fold")
   for e in events:
     style = SEVERITY_STYLE[e.severity]
-    table.add_row(fmt_time(e.timestamp), Text(str(e.severity), style=style), str(e.type), Text(e.message, style=style if e.severity != Severity.INFO else ""))
+    when = fmt_ago(e.timestamp) if relative else fmt_time(e.timestamp)
+    table.add_row(when, severity_text(e.severity), str(e.type), Text(e.message, style=style if e.severity != Severity.INFO else ""))
   return table
 
 
@@ -373,13 +426,44 @@ def bucket_count(window: timedelta, step: timedelta, available: int) -> int:
 
  # summaries ->
 def report_summary(report: ScanReport) -> Text:
-  online = len(report.devices)
+  """one line: how many devices, where, how and how long; problems are appended in color."""
   untrusted = sum(not d.trusted for d in report.devices)
   text = Text()
-  text.append(f"{online} devices", style="bold")
-  text.append(f" on {report.network} via {report.interface} ({report.mode} mode) in {report.duration:.1f}s")
+  text.append(plural(len(report.devices), "device"), style="bold")
+  text.append(f" on {report.network}", style="")
+  if report.interface:
+    text.append(f" via {report.interface}")
+  text.append(f" · {report.mode} mode · {fmt_duration(report.duration)}", style="muted")
   if untrusted:
     text.append(f" · {untrusted} untrusted", style="alert")
+  if report.alerts:
+    text.append(f" · {plural(len(report.alerts), 'alert')}", style="alert")
   if report.discarded:
     text.append(f" · {report.discarded} raw observations discarded", style="muted")
   return text
+
+
+def scan_summary(report: ScanReport) -> RenderableType:
+  """the closing block of `beacon scan`: what was found and the next command worth running."""
+  ok = not report.alerts and not any(not d.trusted for d in report.devices)
+  line = Text("✓ " if ok else "! ", style="ok" if ok else "warning")
+  line.append_text(report_summary(report))
+  steps: list[tuple[str, str]] = []
+  untrusted = sum(not d.trusted for d in report.devices)
+  if report.first_run:
+    steps.append(("beacon review", "go through the devices above and build your known baseline"))
+    steps.append(("beacon devices trust-all", "or accept every device as it is now"))
+  elif untrusted:
+    steps.append(("beacon review", f"decide on the {plural(untrusted, 'untrusted device')}, riskiest first"))
+  if any(e.type == EventType.IDENTITY_CANDIDATE for e in report.events):
+    steps.append(("beacon devices candidates", "a phone seems to be back with a new private mac"))
+  if report.first_run and not report.ports_scanned:
+    steps.append(("beacon scan -p top", "add the most common open ports and their risk"))
+  if not steps:
+    return line
+  grid = Table.grid(padding=(0, 2))
+  grid.add_column(no_wrap=True)
+  grid.add_column(style="muted")
+  for command, why in steps[:3]:
+    grid.add_row(Text.assemble(("→ ", "muted"), (command, "cmd")), why)
+  return Group(line, Text(""), grid)

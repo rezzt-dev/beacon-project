@@ -16,23 +16,23 @@ def render(table, width: int) -> str:
 
  # responsive device table ->
 def test_wide_terminal_shows_every_column():
-  assert visible_columns(160) == {"last seen", "os", "latency", "vendor", "open ports"}
+  assert visible_columns(180) == {"last seen", "os", "latency", "vendor", "open ports"}
 
 
 def test_ports_column_only_when_requested():
-  assert "open ports" not in visible_columns(160, show_ports=False)
+  assert "open ports" not in visible_columns(180, show_ports=False)
 
 
 def test_narrow_terminal_drops_optional_columns_first():
-  assert visible_columns(100) == {"vendor"}
-  assert visible_columns(80) == set()
+  assert visible_columns(120) == {"vendor"}
+  assert visible_columns(100) == set()
 
 
 def test_risk_column_is_opt_in_and_outlasts_the_other_optional_columns():
   assert "risk" not in visible_columns(160)
-  assert visible_columns(160, show_risk=True) >= {"risk", "last seen"}
-  assert visible_columns(80, show_risk=True) == {"risk"}
-  assert visible_columns(60, show_risk=True) == set()
+  assert visible_columns(180, show_risk=True) >= {"risk", "last seen"}
+  assert visible_columns(100, show_risk=True) == {"risk"}
+  assert visible_columns(79, show_risk=True) == set()
 
 
 def test_ip_and_mac_are_never_truncated_on_narrow_terminals():
@@ -41,6 +41,13 @@ def test_ip_and_mac_are_never_truncated_on_narrow_terminals():
     text = render(devices_table([device], width=width), width)
     assert "192.168.100.200" in text
     assert "aa:bb:cc:dd:ee:ff" in text
+
+
+def test_hostname_has_its_own_column_even_on_narrow_terminals():
+  device = make_device("192.168.1.9", "aa:bb:cc:dd:ee:ff", hostname="galaxy-a31", alias="ramona")
+  for width in (80, 160):
+    text = render(devices_table([device], width=width), width)
+    assert "hostname" in text and "galaxy-a31" in text and "ramona" in text
 
 
  # watch view ->
@@ -105,3 +112,79 @@ def test_timeline_table_marks_presence_with_shapes():
   row = [Cell.PRESENT, Cell.PARTIAL, Cell.ABSENT] * 4
   text = render(timeline_table([(device, row)], end - timedelta(hours=12), end), 100)
   assert "laptop" in text and "█▒·█▒·" in text
+
+
+ # watch screen and scan summary ->
+def test_watch_view_keeps_events_visible_by_hiding_offline_devices_first():
+  from beacon.core.models import DeviceStatus
+
+  view = WatchView(interval=30)
+  devices = [make_device(f"192.168.1.{i}", f"aa:bb:cc:dd:ee:{i:02x}") for i in range(1, 9)]
+  devices += [make_device(f"192.168.1.{i}", f"aa:bb:cc:dd:ff:{i:02x}", status=DeviceStatus.OFFLINE) for i in range(20, 26)]
+  view.devices = devices
+  shown, caption = view._visible_devices(10)
+  assert len(shown) == 10 and all(d.status == DeviceStatus.ONLINE for d in shown[:8])
+  assert caption == "+4 more not shown (4 offline) · enlarge the terminal"
+  assert view._visible_devices(20) == (devices, None)
+
+
+def test_watch_view_marks_devices_that_just_appeared():
+  from datetime import UTC, datetime
+
+  from beacon.core.events import Event, EventType, Severity
+  from beacon.core.models import ScanMode
+  from beacon.core.report import ScanReport
+
+  device = make_device("192.168.1.9", "aa:bb:cc:dd:ee:ff", trusted=False)
+  view = WatchView(interval=30)
+  view.on_event(Event(EventType.NEW_DEVICE, Severity.ALERT, "new device", device_key=device.key))
+  view.update(ScanReport(network="192.168.1.0/24", mode=ScanMode.UNPRIVILEGED, started_at=datetime.now(UTC)), [device])
+  text = render(view, 120)
+  assert "new" in text and "1 alert" in text and "✗ 1 untrusted" in text
+  summary = render(view.summary(), 120)
+  assert "watch stopped after 1 scan " in summary and "beacon review" in summary
+
+
+def test_scan_summary_points_to_the_next_command():
+  from datetime import UTC, datetime, timedelta
+
+  from beacon.core.models import ScanMode
+  from beacon.core.report import ScanReport
+  from beacon.ui.render import scan_summary
+
+  start = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
+  report = ScanReport(
+    network="192.168.1.0/24",
+    mode=ScanMode.UNPRIVILEGED,
+    started_at=start,
+    finished_at=start + timedelta(seconds=6.4),
+    interface="wlan0",
+    devices=[make_device("192.168.1.9", "aa:bb:cc:dd:ee:ff", trusted=False)],
+  )
+  text = render(scan_summary(report), 120)
+  assert text.startswith("! 1 device on 192.168.1.0/24 via wlan0 · unprivileged mode · 6.4s · 1 untrusted")
+  assert "→ beacon review" in text
+  report.devices[0].trusted = True
+  assert render(scan_summary(report), 120).startswith("✓ 1 device")
+
+
+def test_events_spell_out_the_severity_with_a_symbol():
+  from beacon.core.events import Event, EventType, Severity
+  from beacon.ui.render import events_table
+
+  text = render(events_table([Event(EventType.NEW_DEVICE, Severity.ALERT, "new device")]), 120)
+  assert "✗ alert" in text
+
+
+def test_relative_times_and_durations():
+  from datetime import UTC, datetime, timedelta
+
+  from beacon.ui.render import fmt_ago, fmt_duration
+
+  now = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
+  assert fmt_ago(now - timedelta(seconds=3), now) == "just now"
+  assert fmt_ago(now - timedelta(minutes=12), now) == "12m ago"
+  assert fmt_ago(now - timedelta(days=2, hours=1), now) == "2d ago"
+  assert fmt_duration(8.24) == "8.2s"
+  assert fmt_duration(245) == "4m 05s"
+  assert fmt_duration(7980) == "2h 13m"

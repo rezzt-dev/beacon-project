@@ -7,7 +7,7 @@ esta carpeta documenta la primera fase de desarrollo de beacon, centrada únicam
 estado al cierre de la fase:
    - **versión:** `0.1.0`.
    - **python:** 3.11 o superior (verificado en 3.13 y 3.14).
-   - **tests:** 227 pruebas automáticas en verde, sin acceso a red.
+   - **tests:** 237 pruebas automáticas en verde, sin acceso a red.
    - **verificación real:** escaneo completo de una red `/24` doméstica en modo sin privilegios en 5-8 segundos, con fabricantes, latencia, hostnames, puertos y banners.
 ---
 ####   INDICE
@@ -29,13 +29,14 @@ estado al cierre de la fase:
    - **detección de macs aleatorizadas** (bit "locally administered") para no marcarlas como fabricante desconocido.
    - **escaneo de puertos tcp** concurrente con `asyncio`, presets (`top`, `web`, `admin`, `iot`, `all`) y lectura de banners.
    - **latencia** con media, mínimo, máximo, jitter y pérdida, por icmp con fallback a tiempo de handshake tcp.
-   - **hostnames** por dns inverso, mdns y netbios, con parsers propios de los protocolos.
+   - **hostnames** por dns inverso, dns del router, mdns y netbios, con parsers propios de los protocolos.
    - **estimación de sistema operativo** por ttl.
    - **inventario persistente** en sqlite con alias, dispositivos de confianza e historial.
    - **eventos de cambio:** dispositivo nuevo, online, offline, cambio de ip, puerto abierto, puerto cerrado, conflicto de ip (posible arp spoofing), identidad candidata, presencia inusual y rutina rota.
    - **triage guiado** (`beacon review`): puntuación de riesgo explicable por dispositivo, revisión de avisos con una tecla y primer escaneo sin una alerta por host.
    - **identidad continua:** una mac aleatorizada que vuelve con otra mac se propone como el mismo dispositivo, con evidencias, y se confirma con `beacon devices link`; la confianza nunca se hereda.
    - **ritmo de presencia:** sesiones de conexión consultables (`beacon timeline`), mapa de calor semanal en `devices show` y avisos `unusual-presence` y `routine-broken`. los datos de presencia son personales: solo locales y fuera de las exportaciones.
-   - **monitorización en vivo** (`beacon watch`) con tabla `rich` que se refresca y alertas.
+   - **monitorización en vivo** (`beacon watch`) con panel de estado (cuenta atrás, etapa del escaneo, contadores), tabla `rich` que se ajusta al alto de la terminal, marca de dispositivos nuevos y resumen al parar.
+   - **web en vivo** (`beacon watch -o vivo.html` o `scripts/beacon-live.sh`): informe html que se recarga solo, con avisos de datos obsoletos, pausa, filtros, búsqueda, orden, riesgo por dispositivo y resaltado de lo nuevo desde que se abrió la página.
    - **exportación** a json, csv y html autocontenido, incluida una exportación que se actualiza en cada ciclo de `watch`.
 ---

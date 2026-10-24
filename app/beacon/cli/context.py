@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 import typer
+from rich.markup import escape
 
 from beacon.config import Settings
 from beacon.core.events import EventBus, EventType
@@ -14,7 +15,7 @@ from beacon.core.risk import RECENT_WINDOW, RiskAssessment, assess
 from beacon.core.vendors import VendorDatabase
 from beacon.pipeline import ProgressReporter, ScanOptions, ScanPipeline
 from beacon.storage import Database, Repository
-from beacon.ui.console import err_console, warn
+from beacon.ui.console import err_console, error, warn
 from beacon.ui.progress import RichProgress
 
 
@@ -47,7 +48,7 @@ class AppContext:
   def find_device_or_exit(self, ref: str) -> Device:
     device = self.repository.find_device(ref)
     if device is None:
-      err_console.print(f"[alert]error:[/alert] no device matches {ref!r} (use a mac, ip, alias or hostname)")
+      error(f"no device matches {escape(repr(ref))}", "use a mac, ip, alias or hostname from `beacon devices list`")
       raise typer.Exit(1)
     return device
 

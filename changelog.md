@@ -16,6 +16,7 @@
 - añadir persistencia en sqlite con migraciones versionadas e inventario con alias y dispositivos de confianza
 - añadir eventos de cambio (`new-device`, `device-online`, `device-offline`, `ip-changed`, `port-opened`, `port-closed`, `ip-conflict`) con periodo de gracia para offline
 - añadir exportación a json, csv y html autocontenido, con exportación en vivo desde `watch`
+- añadir los scripts `scripts/beacon-live.sh` y `scripts/beacon-live.bat`, que lanzan `beacon watch -o` y abren la web en vivo en el navegador por defecto al terminar el primer escaneo
 - añadir batería de 76 tests con `pytest` y configuración de `ruff`
 - añadir documentación de la fase en `.docs/project-info/cli-base/`
 - añadir tres propuestas de funcionalidades en `.docs/unique-features/`: triage guiado con puntuación de riesgo, identidad continua de dispositivos y ritmo de presencia
@@ -28,6 +29,14 @@
 - añadir 151 tests para las tres funcionalidades (227 en total)
 
 #### CAMBIOS
+- rediseñar la web en vivo (`export/html_export.py`): barra de estado con cuenta atrás, pausa y aviso de datos obsoletos, recarga que conserva scroll, filtros y búsqueda, bloque de dispositivos sin confianza con su riesgo, tabla con filtros, búsqueda y orden, resaltado de lo nuevo desde que se abrió la página, eventos filtrables, diseño adaptable a móvil y modo oscuro
+- proteger la web con una `Content-Security-Policy` basada en hashes y sin recursos externos; los datos viajan en atributos escapados, nunca como json en un `<script>`
+- rediseñar la vista de `watch`: panel de estado con contadores y barra de etapa o cuenta atrás, filas que caben en la terminal, marca `new`, eventos en tiempo relativo y resumen al parar
+- mejorar la salida de `scan`: progreso por etapas con ✓, resumen en una línea con símbolo y siguiente comando recomendado
+- mejorar los mensajes de error con una pista de qué probar (`✗ error:` + `→`) y la severidad de los eventos con símbolo (`✗ alert`, `! warning`, `· info`)
+- añadir a las exportaciones de `scan` y `watch` la interfaz, el modo y la duración del escaneo
+- mostrar el hostname en una columna propia en la tabla de consola (`scan`, `watch`, `devices list`) y en la web, con la fuente de la que se obtuvo
+- añadir 14 tests para la web en vivo, la consola y la resolución de hostnames (241 en total)
 - cambiar `app/app.py` para lanzar la cli de `beacon`
 - actualizar `readme.md` con el stack definitivo, la estructura real y la instalación
 - añadir `pyproject.toml` y `uv.lock` con dependencias, script `beacon` y configuración de `pytest` y `ruff`
@@ -47,6 +56,7 @@
 - corregir que una mac aleatorizada que cambia apareciera como un dispositivo nuevo y alertara como intruso: ahora se propone el vínculo con el dispositivo conocido
 - corregir que la presencia histórica no se guardara ni se pudiera consultar: ahora hay sesiones consultables con `beacon timeline`
 - corregir el título del panel de `devices show`, que interpretaba como marcado `rich` los corchetes de un alias
+- corregir que casi ningún dispositivo tuviera hostname cuando el dns del sistema es público (8.8.8.8): ahora también se pregunta el ptr al dns del router, que conoce los nombres de sus clientes dhcp (fuente `router`)
 
 ### ENGLISH
 
@@ -62,6 +72,7 @@
 - add sqlite persistence with versioned migrations and an inventory with aliases and trusted devices
 - add change events (`new-device`, `device-online`, `device-offline`, `ip-changed`, `port-opened`, `port-closed`, `ip-conflict`) with an offline grace period
 - add json, csv and standalone html export, including live export from `watch`
+- add the `scripts/beacon-live.sh` and `scripts/beacon-live.bat` scripts, which launch `beacon watch -o` and open the live web in the default browser once the first scan finishes
 - add a 76 test `pytest` suite and `ruff` configuration
 - add phase documentation in `.docs/project-info/cli-base/`
 - add three feature proposals in `.docs/unique-features/`: guided triage with risk score, continuous device identity and presence rhythm
@@ -74,6 +85,14 @@
 - add 151 tests for the three features (227 in total)
 
 #### CHANGED
+- redesign the live web (`export/html_export.py`): status bar with countdown, pause and a stale data warning, reloads that keep scroll, filters and search, a block of untrusted devices with their risk, a table with filters, search and sorting, highlighting of what is new since the page was opened, filterable events, a mobile layout and dark mode
+- protect the web with a hash based `Content-Security-Policy` and no external resources; data travels in escaped attributes, never as json inside a `<script>`
+- redesign the `watch` view: status panel with counters and a stage or countdown bar, rows that fit the terminal, a `new` mark, relative event times and a summary on exit
+- improve the `scan` output: stage checklist with ✓, a one line summary with a symbol and the recommended next command
+- improve error messages with a hint of what to try (`✗ error:` + `→`) and show event severity with a symbol (`✗ alert`, `! warning`, `· info`)
+- add the interface, mode and scan duration to the `scan` and `watch` exports
+- show the hostname in its own column in the console table (`scan`, `watch`, `devices list`) and in the web page, with the source it came from
+- add 14 tests for the live web, the console and hostname resolution (241 in total)
 - change `app/app.py` to launch the `beacon` cli
 - update `readme.md` with the final stack, the real layout and installation steps
 - add `pyproject.toml` and `uv.lock` with dependencies, the `beacon` script and `pytest` and `ruff` configuration
@@ -93,3 +112,4 @@
 - fix a randomized mac that changes showing up as a new device and alerting as an intruder: the link to the known device is now proposed
 - fix historical presence not being stored or queryable: there are now sessions available through `beacon timeline`
 - fix the `devices show` panel title, which rendered the brackets of an alias as `rich` markup
+- fix that almost no device got a hostname when the system dns is a public one (8.8.8.8): the router's dns is now asked for the ptr too, since it knows the names of its dhcp clients (source `router`)

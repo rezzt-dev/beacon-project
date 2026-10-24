@@ -24,6 +24,7 @@ log = logging.getLogger(__name__)
 
 
  # constants ->
+DNS_PORT = 53
 MDNS_PORT = 5353
 NETBIOS_NS_PORT = 137
 
@@ -66,21 +67,30 @@ async def udp_request(ip: str, port: int, payload: bytes, timeout: float = 1.0, 
 
  # resolver ->
 class HostnameResolver:
-  """resolve a friendly name per host: reverse dns, then mdns, then netbios.
+  """resolve a friendly name per host: reverse dns, then the router's dns, then mdns, then netbios.
 
-  the three lookups run concurrently and the first valid answer by priority wins.
+  the lookups run concurrently and the first valid answer by priority wins.
   reverse dns uses blocking libc calls, so it gets a dedicated thread pool.
+  the system resolver is often a public one (8.8.8.8) that knows nothing about the lan, while the
+  router usually answers ptr queries with the names its dhcp clients announced.
   """
 
-  def __init__(self, timeout: float = 1.5, workers: int = 32) -> None:
+  def __init__(self, timeout: float = 1.5, workers: int = 32, router: str | None = None, router_port: int = DNS_PORT) -> None:
     self.timeout = timeout
+    self.router = router
+    self.router_port = router_port
     self._executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="beacon-dns")
 
   def close(self) -> None:
     self._executor.shutdown(wait=False, cancel_futures=True)
 
   async def resolve(self, ip: str) -> tuple[str | None, str | None]:
-    lookups = (("dns", self.reverse_dns(ip)), ("mdns", self.mdns(ip)), ("netbios", self.netbios(ip)))
+    lookups = (
+      ("dns", self.reverse_dns(ip)),
+      ("router", self.router_dns(ip)),
+      ("mdns", self.mdns(ip)),
+      ("netbios", self.netbios(ip)),
+    )
     results = await asyncio.gather(*(coro for _, coro in lookups), return_exceptions=True)
     for (source, _), result in zip(lookups, results, strict=True):
       if isinstance(result, BaseException):
@@ -99,6 +109,19 @@ class HostnameResolver:
     except (TimeoutError, OSError):
       return None
     return name
+
+  async def router_dns(self, ip: str) -> str | None:
+    if self.router is None:
+      return None
+    txid = random.randrange(1, 0x10000)
+    query = build_query(reverse_pointer(ip), txid=txid, recursion=True)
+    reply = await udp_request(self.router, self.router_port, query, self.timeout, retries=0)
+    if reply is None:
+      return None
+    try:
+      return parse_ptr_response(reply, txid)
+    except DnsParseError:
+      return None
 
   async def mdns(self, ip: str) -> str | None:
     txid = random.randrange(1, 0x10000)

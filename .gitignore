@@ -69,3 +69,5 @@ desktop.ini
 # rust (si se añaden extensiones con pyo3)
 target/
 Cargo.lock
+# web en vivo generada por scripts/beacon-live
+vivo.html

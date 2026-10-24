@@ -24,9 +24,10 @@ from beacon.cli.commands.options import (
   Timeout,
 )
 from beacon.cli.context import get_app
-from beacon.core.events import EventBus, EventType, Severity
+from beacon.core.events import EventBus, Severity
 from beacon.core.models import ScanMode
 from beacon.core.presence import SESSION_GAP
+from beacon.core.report import ScanReport
 from beacon.core.risk import events_at_risk
 from beacon.export import export_to_file
 from beacon.pipeline import ScanError, ScanOptions
@@ -34,11 +35,22 @@ from beacon.scanners.network import TargetError
 from beacon.scanners.ports import parse_port_spec
 from beacon.ui.console import console, err_console, success
 from beacon.ui.live import WatchView
-from beacon.ui.render import devices_table, events_table, report_summary
+from beacon.ui.render import devices_table, events_table, scan_summary
 
 
  # constants ->
 EXIT_ALERTS = 3
+
+
+def _export_meta(report: ScanReport, **extra: object) -> dict[str, object]:
+  """what the exports show about the scan besides the devices: where, how and how long."""
+  return {
+    "network": report.network,
+    "interface": report.interface,
+    "mode": str(report.mode),
+    "duration": round(report.duration, 1),
+    **extra,
+  }
 
 
  # scan ->
@@ -101,20 +113,10 @@ def scan(
     console.print(devices_table(report.devices, show_ports=bool(options.ports)))
     if report.events:
       console.print(events_table(report.events))
-    console.print(report_summary(report))
-    if report.first_run:
-      console.print(
-        "[accent]first scan:[/accent] run [bold]beacon review[/bold] to go through the devices above and "
-        "build your known baseline (or [bold]beacon devices trust-all[/bold] to accept them all)."
-      )
-    if any(e.type == EventType.IDENTITY_CANDIDATE for e in report.events):
-      console.print(
-        "[accent]possible known device:[/accent] a phone seems to be back with a new private mac. "
-        "run [bold]beacon devices candidates[/bold] to confirm it."
-      )
+    console.print(scan_summary(report))
 
   if output is not None:
-    path = export_to_file(output, report.devices, report.events, {"network": report.network}, fmt)
+    path = export_to_file(output, report.devices, report.events, _export_meta(report), fmt)
     (err_console.print if json_out else success)(f"exported {len(report.devices)} devices to {path}")
 
   if fail_on_alert and report.alerts:
@@ -161,7 +163,7 @@ def watch(
     # scans are `interval` apart: a stay is only broken when several of them are missed
     presence_gap=max(SESSION_GAP.total_seconds(), 3.0 * interval),
   )
-  view = WatchView(interval=interval)
+  view = WatchView(interval=interval, output=output)
   bus = EventBus()
   bus.subscribe(view.on_event)
   if bell:
@@ -181,7 +183,8 @@ def watch(
         view.update(report, inventory)
         if output is not None:
           recent = app.repository.list_events(limit=100)
-          export_to_file(output, inventory, recent, {"network": report.network, "refresh": interval})
+          meta = _export_meta(report, refresh=interval, ports_known=app.repository.ports_ever_scanned())
+          export_to_file(output, inventory, recent, meta)
         time.sleep(interval)
   except KeyboardInterrupt:
-    console.print(f"[muted]watch stopped after {view.cycle} scans, {view.alerts} alerts[/muted]")
+    console.print(view.summary())

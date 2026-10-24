@@ -5,6 +5,7 @@ import struct
 import pytest
 
 from beacon.scanners.arp import parse_arp_a, parse_ip_neigh_json, parse_proc_net_arp
+from beacon.scanners.hostname import HostnameResolver
 from beacon.scanners.icmp import build_echo_request, checksum, parse_echo_reply
 from beacon.scanners.network import _linux_gateways
 from beacon.scanners.ports import parse_port_spec, scan_ports, tcp_rtt
@@ -95,6 +96,45 @@ def test_read_name_rejects_pointer_loops():
   packet = struct.pack("!HHHHHH", 0, 0x8000, 0, 0, 0, 0) + b"\xc0\x0c"
   with pytest.raises(ValueError):
     read_name(packet, 12)
+
+
+def test_resolver_asks_the_router_dns_when_the_system_one_knows_nothing():
+  class _Router(asyncio.DatagramProtocol):
+    def connection_made(self, transport) -> None:
+      self.transport = transport
+
+    def datagram_received(self, data: bytes, addr) -> None:
+      txid = data[:2]
+      question = data[12:]
+      target = encode_name("SUN2000-1022B6808337")
+      answer = b"\xc0\x0c" + struct.pack("!HHIH", 12, 1, 0, len(target)) + target
+      self.transport.sendto(txid + struct.pack("!HHHHH", 0x8580, 1, 1, 0, 0) + question + answer, addr)
+
+  async def scenario():
+    loop = asyncio.get_running_loop()
+    transport, _ = await loop.create_datagram_endpoint(_Router, local_addr=("127.0.0.1", 0))
+    resolver = HostnameResolver(timeout=0.5, router="127.0.0.1", router_port=transport.get_extra_info("sockname")[1])
+    resolver.reverse_dns = _nothing
+    resolver.mdns = _nothing
+    resolver.netbios = _nothing
+    try:
+      return await resolver.resolve("192.168.1.133")
+    finally:
+      transport.close()
+      resolver.close()
+
+  async def _nothing(ip):
+    return None
+
+  assert asyncio.run(scenario()) == ("sun2000-1022b6808337", "router")
+
+
+def test_router_dns_is_skipped_without_a_gateway():
+  resolver = HostnameResolver(router=None)
+  try:
+    assert asyncio.run(resolver.router_dns("192.168.1.133")) is None
+  finally:
+    resolver.close()
 
 
  # netbios ->

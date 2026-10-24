@@ -13,13 +13,17 @@ from rich.progress import (
 
  # progress reporter ->
 class RichProgress:
-  """rich implementation of `ProgressReporter`: one transient bar per pipeline stage."""
+  """rich implementation of `ProgressReporter`: a checklist of the pipeline stages.
+
+  finished stages stay on screen with a ✓ while the current one spins, and the whole block
+  is cleared when the scan ends so only the results remain.
+  """
 
   def __init__(self, console: Console, enabled: bool = True) -> None:
     self._progress = Progress(
-      SpinnerColumn(),
-      TextColumn("[bold]{task.description}"),
-      BarColumn(),
+      SpinnerColumn(finished_text="[ok]✓[/ok]"),
+      TextColumn("{task.description}"),
+      BarColumn(bar_width=28, complete_style="cyan", finished_style="grey50", pulse_style="cyan"),
       MofNCompleteColumn(),
       TimeElapsedColumn(),
       console=console,

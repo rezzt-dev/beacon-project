@@ -67,15 +67,29 @@ def main(
 
 
  # entry point ->
+def _target_hint(message: str) -> str:
+  if "too large" in message:
+    return "scan a /16 or smaller, usually your own /24 such as 192.168.1.0/24"
+  if "invalid network" in message:
+    return "use cidr notation such as 192.168.1.0/24, or leave it out to scan the interface network"
+  return "list the interfaces with `beacon interfaces` and pick one with `--iface`"
+
+
 def run() -> None:
   try:
     app()
-  except (TargetError, ScanError, ValueError) as exc:
+  except TargetError as exc:
+    error(str(exc), _target_hint(str(exc)))
+    sys.exit(1)
+  except ScanError as exc:
+    error(str(exc), "run it as root/administrator, or use `--mode unprivileged`, which needs no privileges")
+    sys.exit(1)
+  except ValueError as exc:
     error(str(exc))
     sys.exit(1)
   except PermissionError as exc:
-    error(f"{exc}. try again with administrator privileges or `--mode unprivileged`.")
+    error(str(exc), "try again with administrator privileges or `--mode unprivileged`")
     sys.exit(1)
   except KeyboardInterrupt:
-    err_console.print("[muted]interrupted[/muted]")
+    err_console.print("[muted]■ interrupted[/muted]")
     sys.exit(130)

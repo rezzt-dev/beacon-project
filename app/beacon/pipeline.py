@@ -107,7 +107,8 @@ class ScanPipeline:
       devices = merged.devices
       for device in devices.values():
         device.is_gateway = iface.gateway is not None and device.ip == str(iface.gateway)
-      await self._enrich(list(devices.values()), options, pinger)
+      router = str(iface.gateway) if iface.gateway is not None else None
+      await self._enrich(list(devices.values()), options, pinger, router)
     finally:
       if pinger is not None:
         pinger.close()
@@ -231,10 +232,12 @@ class ScanPipeline:
     return [r for r in results if r is not None]
 
   # enrichment ->
-  async def _enrich(self, devices: list[Device], options: ScanOptions, pinger: IcmpPinger | None) -> None:
+  async def _enrich(
+    self, devices: list[Device], options: ScanOptions, pinger: IcmpPinger | None, router: str | None = None
+  ) -> None:
     host_limiter = asyncio.Semaphore(options.host_concurrency)
     port_limiter = asyncio.Semaphore(options.port_concurrency)
-    resolver = HostnameResolver() if options.resolve_hostnames else None
+    resolver = HostnameResolver(router=router) if options.resolve_hostnames else None
     banner_timeout = 1.5 if options.grab_banners else None
     self.progress.stage("enriching devices", len(devices))
 

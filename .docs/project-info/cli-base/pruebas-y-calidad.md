@@ -4,7 +4,7 @@
 ####   EJECUCION
 ```bash
 uv sync                          # instala también el grupo dev (pytest, ruff)
-uv run pytest                    # 227 tests, ~1 segundo, sin acceso a red
+uv run pytest                    # 237 tests, ~1 segundo, sin acceso a red
 uv run ruff check app tests      # lint (pyflakes, pycodestyle, isort, bugbear, pyupgrade, simplify)
 ```
 la configuración está en `pyproject.toml`: `pythonpath = ["app"]` para pytest y sangría de 2 espacios para ruff, igual que el resto del código.
@@ -26,8 +26,8 @@ la configuración está en `pyproject.toml`: `pythonpath = ["app"]` para pytest 
 | `tests/test_vendors.py` | búsqueda oui por prefijo más largo (`/24`, `/28`, `/36`), líneas mal formadas, fallback vacío y estimación de so por ttl. |
 | `tests/test_scanners.py` | parsers de `ip neigh`, `/proc/net/arp`, `arp -a` (macos y windows) y `/proc/net/route`; paquetes icmp; dns/mdns con compresión y bucles de punteros; netbios `NBSTAT`; especificación de puertos; escaneo real contra un servidor tcp local con banner. |
 | `tests/test_storage.py` | migraciones (incluida la v1 → v4 conservando datos) y rechazo de esquemas futuros, ida y vuelta de dispositivos, sincronización de puertos, conservación de alias y confianza, cambios a offline, búsqueda por referencia, filtros de eventos, estadísticas, eventos revisados, vínculos de identidad, sesiones de presencia (apertura, cierre con `last_seen`, huecos largos, retención) y atomicidad de `save_scan`. |
-| `tests/test_export.py` | detección de formato, json válido sin ficheros temporales residuales, protección contra inyección en csv y escape en html. |
-| `tests/test_ui.py` | columnas responsive de la tabla de dispositivos (ip y mac nunca truncadas, columna de riesgo opcional), vista de `watch` tras un escaneo fallido, riesgo escrito con texto, marca de identidad, mapa de calor y línea temporal. |
+| `tests/test_export.py` | detección de formato, json válido sin ficheros temporales residuales, protección contra inyección en csv y escape en html; en la web en vivo, la política csp con hashes sin recursos externos, el autorrefresco sin javascript, el bloque de dispositivos sin confianza con su riesgo, los atributos de los filtros y los estados vacíos. |
+| `tests/test_ui.py` | columnas responsive de la tabla de dispositivos (ip y mac nunca truncadas, columna de riesgo opcional), vista de `watch` tras un escaneo fallido, filas que caben en la terminal (primero se ocultan los offline), marca de dispositivo nuevo, resumen al parar, siguiente paso tras `scan`, severidad con símbolo, tiempos relativos, riesgo escrito con texto, marca de identidad, mapa de calor y línea temporal. |
 | `tests/test_cli.py` | `--version`, inventario vacío, referencia inexistente, búsqueda de fabricantes, exportación y validación de puertos, con un `BEACON_HOME` temporal. |
 ---
 ####   VERIFICACION MANUAL
@@ -36,6 +36,7 @@ además de los tests, se validó la cli contra una red doméstica `/24` real en 
    - `beacon scan -p top`: puertos y banners http (`HTTP/1.0 307 Temporary Redirect | server: ...`).
    - flujo de confianza: `trust-all`, alias, segundo escaneo con alerta solo para el dispositivo que no estaba en la línea base.
    - `beacon watch -o vivo.html`: tabla en vivo, eventos offline/online y html con autorrefresco.
+   - web en vivo revisada con firefox sin cabeza en escritorio (1440 px), móvil (390 px) y modo oscuro, y pasada por el detector de la skill `impeccable` (`.docs/skills/impeccable/scripts/detect.mjs`).
    - `beacon ports`, `beacon ping` (icmp con ttl), `beacon events` con filtros, `export` en los tres formatos y `--json`.
    - python 3.13 y 3.14.
    - funciones únicas (red `/24` real, sin privilegios): el primer `beacon scan --fail-on-alert` termina con `0` y 11 avisos en lugar de 11 alertas; `beacon review --list` ordena por riesgo con motivos; `beacon scan --fail-on-risk 55` termina con `0` al aparecer dos dispositivos medios; `beacon timeline` y `beacon devices list --risk` se renderizan sin truncar ip ni mac. **no verificado en vivo:** el reconocimiento de un móvil que vuelve con otra mac (ningún dispositivo respondió a la consulta de servicios mdns), por lo que está probado con redes simuladas y no con dispositivos reales.

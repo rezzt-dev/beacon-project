@@ -47,8 +47,9 @@ fichero: `scanners/latency.py`.
 ---
 ####   RESOLUCION DE NOMBRES
 fichero: `scanners/hostname.py` y `scanners/protocols/`.
-   - se lanzan en paralelo tres consultas y gana la primera válida por prioridad: **dns inverso** → **mdns** → **netbios**.
+   - se lanzan en paralelo cuatro consultas y gana la primera válida por prioridad: **dns inverso** → **dns del router** → **mdns** → **netbios**.
    - **dns inverso:** `gethostbyaddr` en un pool de hilos dedicado con timeout.
+   - **dns del router:** consulta ptr directa al puerto 53 de la puerta de enlace. el dns del sistema suele ser público (8.8.8.8) y no conoce la red local, mientras que el router responde con los nombres que sus clientes anunciaron por dhcp. la fuente queda registrada como `router`.
    - **mdns:** consulta ptr unicast (`legacy unicast`, rfc 6762) al puerto 5353 del propio host. el paquete dns se construye y se parsea con código propio, incluida la compresión de nombres y la protección contra bucles de punteros.
    - **netbios:** consulta `NBSTAT` (rfc 1001/1002) al puerto 137 y se toma el nombre único con sufijo `0x00` (nombre de equipo).
 ---

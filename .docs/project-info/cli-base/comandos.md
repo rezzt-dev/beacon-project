@@ -32,7 +32,7 @@
 | `--no-identity` | — | no sondea servicios mdns ni intenta reconocer macs aleatorizadas. |
 | `--no-presence` | — | no guarda sesiones de presencia ni emite anomalías de presencia. |
 
-**`beacon watch [RED]`** — escanea en bucle con una tabla en vivo y alertas. acepta `--iface`, `--ports`, `--mode`, `--samples`, `--timeout` y `--no-resolve`, además de:
+**`beacon watch [RED]`** — escanea en bucle con una tabla en vivo y alertas. la pantalla tiene un panel de estado (red, ciclo, tiempo en marcha, contadores online/offline/sin confianza/alertas y una barra con la etapa del escaneo o la cuenta atrás hasta el siguiente), la tabla de dispositivos con los sin confianza primero y la etiqueta `new` en los recién aparecidos, y los últimos eventos en tiempo relativo. si la terminal es baja, se ocultan antes los dispositivos offline que los eventos. al parar con ctrl+c imprime un resumen y el siguiente paso. acepta `--iface`, `--ports`, `--mode`, `--samples`, `--timeout` y `--no-resolve`, además de:
 
 | opción | por defecto | descripción |
 |---|---|---|

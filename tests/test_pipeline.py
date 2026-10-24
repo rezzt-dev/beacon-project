@@ -47,7 +47,7 @@ def network(monkeypatch, vendors):
   async def discover(self, network_, iface_, privileged, pinger, options):
     return [Observation(ip=ip, mac=mac, source=DiscoverySource.ARP_SWEEP) for ip, mac in net.hosts.items()]
 
-  async def enrich(self, devices, options, pinger):
+  async def enrich(self, devices, options, pinger, router=None):
     for device in devices:
       device.hostname = net.hostnames.get(device.ip)
       device.services = net.services.get(device.ip, []) if options.identity and device.randomized_mac else []
